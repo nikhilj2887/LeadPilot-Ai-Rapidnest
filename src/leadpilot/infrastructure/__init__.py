@@ -1,0 +1,1 @@
+"""LeadPilot infrastructure adapters."""
