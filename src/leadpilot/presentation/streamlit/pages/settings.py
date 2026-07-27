@@ -2,8 +2,10 @@ from __future__ import annotations
 
 import streamlit as st
 
+from leadpilot.bootstrap import Container
 
-def render(container: object) -> None:
+
+def render(container: Container) -> None:
     st.title("Settings")
     health = container.health_check.check()
     st.subheader("Application health")

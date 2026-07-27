@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from collections.abc import Callable
 
+from leadpilot.bootstrap import Container
 from leadpilot.presentation.streamlit.pages import (
     companies,
     dashboard,
@@ -10,7 +11,7 @@ from leadpilot.presentation.streamlit.pages import (
     settings,
 )
 
-PageRenderer = Callable[[object], None]
+PageRenderer = Callable[[Container], None]
 
 PAGES: dict[str, PageRenderer] = {
     "Dashboard": dashboard.render,

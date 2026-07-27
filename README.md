@@ -1,6 +1,14 @@
 # LeadPilot AI
 
-LeadPilot AI is RapidNest's lead-intelligence application. This Milestone 1 repository contains only the production-oriented application foundation: configuration, structured logging, SQLite persistence, Alembic migrations, a health check, and a Streamlit shell. Business entities and lead-scoring features are intentionally not implemented yet.
+LeadPilot AI is RapidNest's lead-intelligence application. Milestone 2 adds a complete company pipeline to the production-oriented foundation: persisted companies, application services, Streamlit CRUD workflows, and dashboard metrics.
+
+## Milestone 2 features
+
+- Create, browse, search, update, and delete prospect companies.
+- Track a company's website, industry, location, size, pipeline status, source, and notes.
+- Search and filter companies, review detail views, and browse results ten at a time.
+- Monitor lead-stage counts, recent companies, and status distribution on the dashboard.
+- Persist data in SQLite through SQLAlchemy 2.x and version the schema with Alembic.
 
 ## Prerequisites (macOS)
 
@@ -67,4 +75,12 @@ Create a future migration after adding SQLAlchemy models:
 python -m alembic revision --autogenerate -m "describe the schema change"
 ```
 
-Milestone 1 includes an empty baseline migration. No company, contact, authentication, scoring, proposal, or other business tables exist yet.
+The migration history contains the Milestone 1 baseline and the Milestone 2 `companies` table. Apply migrations before starting the application after every pull.
+
+## Company data
+
+Companies require a unique name and one of these pipeline statuses: `New`, `Researching`, `Qualified`, `Contacted`, `Proposal`, `Won`, or `Lost`. Supported company sizes are `Solo`, `2-10`, `11-50`, `51-200`, `201-500`, `501-1000`, and `1000+`.
+
+Websites may be entered with or without a scheme; bare domains such as `example.com` are normalized to `https://example.com`. Industry, country, city, company size, source, and notes are optional. Company names are treated as case-insensitively unique by the application.
+
+This milestone intentionally does not add contacts, authentication, scoring, proposals, external AI providers, or integrations.
