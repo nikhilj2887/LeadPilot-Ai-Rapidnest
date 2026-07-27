@@ -1,1 +1,1 @@
-"""Streamlit placeholder pages."""
+"""LeadPilot Streamlit page renderers."""

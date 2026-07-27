@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Sequence
+from html import escape
 
 import streamlit as st
 
@@ -12,77 +13,120 @@ from leadpilot.application.companies import (
     CompanyValidationError,
 )
 from leadpilot.bootstrap import Container
+from leadpilot.presentation.streamlit.company_query import (
+    PAGE_SIZE,
+    SORT_OPTIONS,
+    build_page,
+    filter_companies,
+    paginate,
+    sort_companies,
+)
+from leadpilot.presentation.streamlit.components import (
+    alert_message,
+    empty_state,
+    form_section,
+    kpi_card,
+    page_header,
+    section_header,
+    status_badge,
+)
+from leadpilot.presentation.streamlit.state import (
+    FILTER_DEFAULTS,
+    open_company_mode,
+    reset_company_filters,
+    return_to_company_list,
+    sync_filter_page,
+)
 
-PAGE_SIZE = 10
-
-
-def filter_companies(
-    companies: Sequence[Company],
-    *,
-    query: str = "",
-    status: str = "All",
-    industry: str = "All",
-    country: str = "All",
-) -> list[Company]:
-    needle = query.strip().casefold()
-    searchable = lambda company: (  # noqa: E731
-        company.name,
-        company.website,
-        company.industry,
-        company.country,
-        company.city,
-    )
-    return [
-        company
-        for company in companies
-        if (
-            not needle
-            or any(needle in (value or "").casefold() for value in searchable(company))
-        )
-        and (status == "All" or company.status == status)
-        and (industry == "All" or company.industry == industry)
-        and (country == "All" or company.country == country)
-    ]
+__all__ = ["PAGE_SIZE", "filter_companies", "paginate", "sort_companies"]
 
 
-def paginate(companies: Sequence[Company], page: int) -> list[Company]:
-    start = (page - 1) * PAGE_SIZE
-    return list(companies[start : start + PAGE_SIZE])
+def _go_to(mode: str, company_id: int | None = None) -> None:
+    open_company_mode(st.session_state, mode, company_id)
+    st.rerun()
 
 
 def _save_company(container: Container, company: Company | None = None) -> None:
-    action = "Update" if company else "Add"
+    action = "Save Changes" if company else "Add Company"
+    page_header(
+        "Edit Company" if company else "Add Company",
+        "Update this lead without changing the rules that keep your data clean."
+        if company
+        else "Create a company record to begin tracking it through your pipeline.",
+        eyebrow="Companies",
+    )
     with st.form(f"company-form-{company.id if company else 'new'}"):
-        name = st.text_input("Company name *", value=company.name if company else "")
-        website = st.text_input(
-            "Website", value=(company.website or "") if company else ""
+        form_section(
+            "Company Information",
+            "Company name is required. Bare website domains are saved as secure URLs.",
         )
         left, right = st.columns(2)
+        name = left.text_input(
+            "Company Name *",
+            value=company.name if company else "",
+            help="Required. Company names must be unique.",
+            max_chars=200,
+        )
+        website = right.text_input(
+            "Website",
+            value=(company.website or "") if company else "",
+            placeholder="example.com",
+            help="Enter a domain or a complete HTTP(S) URL.",
+        )
         industry = left.text_input(
-            "Industry", value=(company.industry or "") if company else ""
+            "Industry",
+            value=(company.industry or "") if company else "",
+            placeholder="e.g. Software",
         )
+        size_options = ("", *COMPANY_SIZES)
         company_size = right.selectbox(
-            "Company size",
-            ("", *COMPANY_SIZES),
-            index=("", *COMPANY_SIZES).index(company.company_size or "")
-            if company
-            else 0,
+            "Company Size",
+            size_options,
+            index=size_options.index(company.company_size or "") if company else 0,
+            format_func=lambda value: value or "Select a size",
         )
+
+        form_section("Location", "Add the primary location for this company.")
+        left, right = st.columns(2)
         country = left.text_input(
             "Country", value=(company.country or "") if company else ""
         )
         city = right.text_input("City", value=(company.city or "") if company else "")
+
+        form_section(
+            "Lead Management",
+            "Use status and source to keep pipeline reporting useful.",
+        )
+        left, right = st.columns(2)
         status = left.selectbox(
             "Status",
             COMPANY_STATUSES,
             index=COMPANY_STATUSES.index(company.status) if company else 0,
         )
         source = right.text_input(
-            "Source", value=(company.source or "") if company else ""
+            "Source",
+            value=(company.source or "") if company else "",
+            placeholder="e.g. Referral",
         )
-        notes = st.text_area("Notes", value=(company.notes or "") if company else "")
-        submitted = st.form_submit_button(f"{action} Company", type="primary")
 
+        form_section(
+            "Additional Information",
+            "Capture context that will help with the next conversation.",
+        )
+        notes = st.text_area(
+            "Notes",
+            value=(company.notes or "") if company else "",
+            placeholder="Add useful context, priorities, or next steps…",
+        )
+        cancel, submit, _ = st.columns([1, 1.3, 3])
+        cancelled = cancel.form_submit_button("Cancel", use_container_width=True)
+        submitted = submit.form_submit_button(
+            action, type="primary", use_container_width=True
+        )
+
+    if cancelled:
+        return_to_company_list(st.session_state)
+        st.rerun()
     if not submitted:
         return
     values = {
@@ -97,174 +141,317 @@ def _save_company(container: Container, company: Company | None = None) -> None:
         "notes": notes,
     }
     try:
-        if company:
+        saved = (
             container.companies.update_company(company.id, **values)
-        else:
-            container.companies.create_company(**values)
+            if company
+            else container.companies.create_company(**values)
+        )
     except (CompanyValidationError, CompanyNotFoundError) as exc:
-        st.error(str(exc))
+        alert_message(str(exc), kind="error")
     else:
-        st.session_state.company_mode = "list"
-        st.success(f"Company {action.lower()}d successfully.")
+        return_to_company_list(st.session_state)
+        st.session_state.company_flash = f"{saved.name} was saved successfully."
         st.rerun()
+
+
+def _field(label: str, value: str | None) -> None:
+    st.markdown(
+        f'<div class="lp-label">{escape(label)}</div>'
+        f'<div class="lp-value">{escape(value or "Not provided")}</div>',
+        unsafe_allow_html=True,
+    )
 
 
 def _detail(container: Container, company: Company) -> None:
     if st.button("← Back to Companies"):
-        st.session_state.company_mode = "list"
-        st.rerun()
-    st.subheader(company.name)
-    if company.website:
-        st.markdown(f"🌐 [{company.website}]({company.website})")
-    left, right = st.columns(2)
-    left.markdown(f"**Status:** {company.status}")
-    left.markdown(f"**Industry:** {company.industry or '—'}")
-    left.markdown(f"**Company size:** {company.company_size or '—'}")
-    right.markdown(f"**Country:** {company.country or '—'}")
-    right.markdown(f"**City:** {company.city or '—'}")
-    right.markdown(f"**Source:** {company.source or '—'}")
-    st.markdown("**Notes**")
-    st.write(company.notes or "No notes provided.")
-    st.caption(
-        f"Added {company.created_at:%Y-%m-%d} · Updated {company.updated_at:%Y-%m-%d}"
+        _go_to("list")
+    title, actions = st.columns([5, 2])
+    with title:
+        page_header(
+            company.name,
+            "A complete view of this company and its current pipeline context.",
+            eyebrow="Company profile",
+        )
+        st.markdown(status_badge(company.status), unsafe_allow_html=True)
+        if company.website:
+            st.link_button("↗ Visit Website", company.website)
+    edit, remove = actions.columns(2)
+    if edit.button("Edit", type="primary", use_container_width=True):
+        _go_to("edit", company.id)
+    if remove.button("Delete", use_container_width=True):
+        _go_to("delete", company.id)
+
+    section_header("Company Overview")
+    first = st.columns(3)
+    with first[0]:
+        _field("Website", company.website)
+    with first[1]:
+        _field("Industry", company.industry)
+    with first[2]:
+        _field("Company Size", company.company_size)
+
+    section_header("Location")
+    location = st.columns(2)
+    with location[0]:
+        _field("Country", company.country)
+    with location[1]:
+        _field("City", company.city)
+
+    section_header("Lead Information")
+    lead = st.columns(2)
+    with lead[0]:
+        _field("Status", company.status)
+    with lead[1]:
+        _field("Source", company.source)
+
+    section_header("Notes")
+    st.markdown(
+        f'<div class="lp-panel">{escape(company.notes or "No notes have been added.")}</div>',
+        unsafe_allow_html=True,
     )
+
+    section_header("Record Metadata")
+    metadata = st.columns(2)
+    with metadata[0]:
+        _field("Created Date", company.created_at.strftime("%d %B %Y, %H:%M"))
+    with metadata[1]:
+        _field("Updated Date", company.updated_at.strftime("%d %B %Y, %H:%M"))
+
+    section_header("Future Workspace", "Reserved for upcoming LeadPilot modules.")
+    for column, (name, icon) in zip(
+        st.columns(4),
+        (
+            ("Contacts", "◎"),
+            ("Activities", "↻"),
+            ("AI Insights", "✦"),
+            ("Discovery Audit", "⌕"),
+        ),
+        strict=True,
+    ):
+        with column:
+            st.markdown(
+                f'<div class="lp-preview"><div>{icon}</div><h3>{name}</h3>'
+                '<span class="lp-coming">Future milestone</span></div>',
+                unsafe_allow_html=True,
+            )
 
 
 def _delete_confirmation(container: Container, company: Company) -> None:
-    st.warning(f"Delete {company.name}? This action cannot be undone.")
-    confirmed = st.checkbox("I confirm that I want to delete this company")
-    cancel, remove = st.columns(2)
-    if cancel.button("Cancel"):
-        st.session_state.company_mode = "list"
-        st.rerun()
-    if remove.button("Delete Company", type="primary", disabled=not confirmed):
+    page_header(
+        "Delete Company",
+        "Review this irreversible action before confirming.",
+        eyebrow="Confirmation required",
+    )
+    st.markdown(
+        f'<div class="lp-panel"><div class="lp-eyebrow">Permanent deletion</div>'
+        f"<h3>{escape(company.name)}</h3><p>This company record and its notes will be "
+        "deleted. This action cannot be undone.</p></div>",
+        unsafe_allow_html=True,
+    )
+    confirmed = st.checkbox(
+        f"I confirm that I want to permanently delete {company.name}",
+        key=f"confirm-delete-{company.id}",
+    )
+    cancel, remove, _ = st.columns([1, 1.5, 3])
+    if cancel.button("Cancel", use_container_width=True):
+        _go_to("view", company.id)
+    if remove.button(
+        "Delete Company",
+        type="primary",
+        disabled=not confirmed,
+        use_container_width=True,
+    ):
         try:
             container.companies.delete_company(company.id)
-        except CompanyNotFoundError as exc:
-            st.error(str(exc))
-        else:
-            st.session_state.company_mode = "list"
-            st.rerun()
+        except CompanyNotFoundError:
+            alert_message(
+                "This company no longer exists. Returning to the company list.",
+                kind="warning",
+            )
+        return_to_company_list(st.session_state)
+        st.session_state.company_flash = f"{company.name} was deleted."
+        st.rerun()
 
 
-def _filters(companies: Sequence[Company]) -> tuple[str, str, str, str]:
-    query = st.text_input(
+def _filters(companies: Sequence[Company]) -> tuple[str, str, str, str, str]:
+    for key, value in FILTER_DEFAULTS.items():
+        st.session_state.setdefault(key, value)
+    toolbar = st.columns([2.2, 1, 1, 1, 1.25])
+    query = toolbar[0].text_input(
         "Search",
         key="company_search",
-        placeholder="Name, website, industry, country, or city",
+        placeholder="Search companies…",
     )
-    columns = st.columns(3)
-    status = columns[0].selectbox(
+    status = toolbar[1].selectbox(
         "Status", ("All", *COMPANY_STATUSES), key="company_status"
     )
-    industries = sorted({company.industry for company in companies if company.industry})
-    industry = columns[1].selectbox(
+    industries = sorted({item.industry for item in companies if item.industry})
+    industry = toolbar[2].selectbox(
         "Industry", ("All", *industries), key="company_industry"
     )
-    countries = sorted({company.country for company in companies if company.country})
-    country = columns[2].selectbox(
+    countries = sorted({item.country for item in companies if item.country})
+    country = toolbar[3].selectbox(
         "Country", ("All", *countries), key="company_country"
     )
+    sort = toolbar[4].selectbox("Sort", SORT_OPTIONS, key="company_sort")
     if st.button("Clear Filters"):
-        for key in (
-            "company_search",
-            "company_status",
-            "company_industry",
-            "company_country",
-        ):
-            st.session_state[key] = "" if key == "company_search" else "All"
-        st.session_state.company_page = 1
+        reset_company_filters(st.session_state)
         st.rerun()
-    return query, status, industry, country
+    signature = (query, status, industry, country, sort)
+    sync_filter_page(st.session_state, signature)
+    return query, status, industry, country, sort
 
 
-def _list_view(container: Container, companies: list[Company]) -> None:
-    query, status, industry, country = _filters(companies)
+def _company_row(company: Company) -> None:
+    info, details, status_col, updated, actions = st.columns([2.1, 1.5, 1, 1, 1.45])
+    with info:
+        st.markdown(f"**{company.name}**")
+        if company.website:
+            st.markdown(f"[{company.website}]({company.website})")
+        else:
+            st.caption("No website")
+    with details:
+        st.markdown(company.industry or "Industry not provided")
+        st.caption(
+            ", ".join(filter(None, (company.city, company.country)))
+            or "Location not provided"
+        )
+        st.caption(f"Size: {company.company_size or 'Not provided'}")
+    with status_col:
+        st.markdown(status_badge(company.status), unsafe_allow_html=True)
+    with updated:
+        st.caption(company.updated_at.strftime("%d %b %Y"))
+    view, edit, delete = actions.columns(3)
+    if view.button("View", key=f"view-{company.id}", help=f"View {company.name}"):
+        _go_to("view", company.id)
+    if edit.button("Edit", key=f"edit-{company.id}", help=f"Edit {company.name}"):
+        _go_to("edit", company.id)
+    if delete.button(
+        "Delete", key=f"delete-{company.id}", help=f"Delete {company.name}"
+    ):
+        _go_to("delete", company.id)
+    st.divider()
+
+
+def _pagination(page_number: int, page_count: int) -> None:
+    previous, label, next_page = st.columns([1, 3, 1])
+    if previous.button(
+        "← Previous",
+        disabled=page_number == 1,
+        use_container_width=True,
+    ):
+        st.session_state.company_page = page_number - 1
+        st.rerun()
+    label.markdown(
+        f"<div style='text-align:center;padding:.5rem'>Page {page_number} of "
+        f"{page_count}</div>",
+        unsafe_allow_html=True,
+    )
+    if next_page.button(
+        "Next →",
+        disabled=page_number == page_count,
+        use_container_width=True,
+    ):
+        st.session_state.company_page = page_number + 1
+        st.rerun()
+
+
+def _list_view(container: Container) -> None:
+    heading, action = st.columns([6, 1.2])
+    with heading:
+        page_header(
+            "Companies",
+            "Search, qualify, and manage every company in your lead pipeline.",
+            eyebrow="Lead workspace",
+        )
+    if action.button("＋ Add Company", type="primary", use_container_width=True):
+        _go_to("add")
+
+    flash = st.session_state.pop("company_flash", None)
+    if flash:
+        alert_message(flash, kind="success")
+
+    companies = container.companies.list_companies()
+    metrics = container.companies.metrics()
+    summary = st.columns(5)
+    for column, (label, value, icon) in zip(
+        summary,
+        (
+            ("Total", metrics.total, "▦"),
+            ("New", metrics.new, "✦"),
+            ("Qualified", metrics.qualified, "✓"),
+            ("Contacted", metrics.contacted, "↗"),
+            ("Proposal", metrics.proposal, "▤"),
+        ),
+        strict=True,
+    ):
+        with column:
+            kpi_card(label, value, icon)
+
+    section_header("Company Directory", "Use filters and sorting to focus your list.")
+    query, status, industry, country, sort = _filters(companies)
     filtered = filter_companies(
         companies, query=query, status=status, industry=industry, country=country
     )
-    if not filtered:
-        st.info("No companies match your filters. Clear filters or add a company.")
-        return
-
-    page_count = max(1, (len(filtered) + PAGE_SIZE - 1) // PAGE_SIZE)
-    current = min(st.session_state.get("company_page", 1), page_count)
-    st.session_state.company_page = current
-    st.caption(f"{len(filtered)} compan{'y' if len(filtered) == 1 else 'ies'}")
-    for company in paginate(filtered, current):
-        with st.container(border=True):
-            title, actions = st.columns([3, 2])
-            title.markdown(f"### {company.name}")
-            if company.website:
-                title.markdown(f"[{company.website}]({company.website})")
-            title.caption(
-                " · ".join(
-                    filter(None, (company.industry, company.country, company.city))
-                )
-                or "No details"
-            )
-            view, edit, delete = actions.columns(3)
-            if view.button("View", key=f"view-{company.id}"):
-                st.session_state.update(
-                    company_mode="view", selected_company=company.id
-                )
-                st.rerun()
-            if edit.button("Edit", key=f"edit-{company.id}"):
-                st.session_state.update(
-                    company_mode="edit", selected_company=company.id
-                )
-                st.rerun()
-            if delete.button("Delete", key=f"delete-{company.id}"):
-                st.session_state.update(
-                    company_mode="delete", selected_company=company.id
-                )
-                st.rerun()
-            st.caption(
-                f"Status: {company.status} · Size: {company.company_size or '—'}"
-            )
-    if page_count > 1:
-        selected_page = st.selectbox(
-            "Page", range(1, page_count + 1), index=current - 1
+    ordered = sort_companies(filtered, sort)
+    page = build_page(ordered, st.session_state.get("company_page", 1))
+    st.session_state.company_page = page.number
+    st.caption(
+        f"{page.total_items} result{'s' if page.total_items != 1 else ''} · "
+        f"Up to {PAGE_SIZE} per page"
+    )
+    if not companies:
+        empty_state(
+            "No companies yet",
+            "Add your first company to start building and tracking your lead pipeline.",
+            "▦",
         )
-        if selected_page != current:
-            st.session_state.company_page = selected_page
-            st.rerun()
+        if st.button("Add your first company", type="primary"):
+            _go_to("add")
+        return
+    if not page.items:
+        empty_state(
+            "No matching companies",
+            "Try changing your search or filters, or clear them to see every company.",
+            "⌕",
+        )
+        return
+    for company in page.items:
+        _company_row(company)
+    _pagination(page.number, page.count)
 
 
 def render(container: Container) -> None:
-    st.title("Companies")
-    st.caption("Manage and qualify company leads.")
     mode = st.session_state.get("company_mode", "list")
     if mode == "list":
-        if st.button("Add Company", type="primary"):
-            st.session_state.company_mode = "add"
-            st.rerun()
-        companies = container.companies.list_companies()
-        if not companies:
-            st.info("No companies yet. Select Add Company to create your first lead.")
-            return
-        _list_view(container, companies)
+        _list_view(container)
         return
     if mode == "add":
-        if st.button("← Cancel"):
-            st.session_state.company_mode = "list"
-            st.rerun()
         _save_company(container)
         return
+
+    company_id = st.session_state.get("selected_company")
+    if not isinstance(company_id, int):
+        return_to_company_list(st.session_state)
+        alert_message("Choose a company from the list to continue.", kind="warning")
+        _list_view(container)
+        return
     try:
-        company = container.companies.get_company(st.session_state.selected_company)
-    except CompanyNotFoundError as exc:
-        st.error(str(exc))
-        if st.button("Back to Companies"):
-            st.session_state.company_mode = "list"
-            st.rerun()
+        company = container.companies.get_company(company_id)
+    except CompanyNotFoundError:
+        return_to_company_list(st.session_state)
+        alert_message(
+            "That company is no longer available. The list has been refreshed.",
+            kind="warning",
+        )
+        _list_view(container)
         return
     if mode == "view":
         _detail(container, company)
     elif mode == "edit":
-        if st.button("← Cancel Edit"):
-            st.session_state.company_mode = "list"
-            st.rerun()
         _save_company(container, company)
     elif mode == "delete":
         _delete_confirmation(container, company)
+    else:
+        return_to_company_list(st.session_state)
+        _list_view(container)
