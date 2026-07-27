@@ -16,6 +16,13 @@ class Settings:
     environment: str
     log_level: str
     database_url: str
+    discovery_connect_timeout: float = 5.0
+    discovery_read_timeout: float = 10.0
+    discovery_max_pages: int = 9
+    discovery_max_response_bytes: int = 2_000_000
+    discovery_user_agent: str = "LeadPilot/0.1 Website Discovery"
+    discovery_retry_count: int = 1
+    discovery_slow_response_ms: int = 3000
 
     @classmethod
     def from_env(cls, env_file: str | None = ".env") -> Settings:
@@ -38,6 +45,26 @@ class Settings:
             environment=os.getenv("LEADPILOT_ENV", "development").strip(),
             log_level=log_level,
             database_url=database_url,
+            discovery_connect_timeout=float(
+                os.getenv("LEADPILOT_DISCOVERY_CONNECT_TIMEOUT", "5")
+            ),
+            discovery_read_timeout=float(
+                os.getenv("LEADPILOT_DISCOVERY_READ_TIMEOUT", "10")
+            ),
+            discovery_max_pages=int(os.getenv("LEADPILOT_DISCOVERY_MAX_PAGES", "9")),
+            discovery_max_response_bytes=int(
+                os.getenv("LEADPILOT_DISCOVERY_MAX_RESPONSE_BYTES", "2000000")
+            ),
+            discovery_user_agent=os.getenv(
+                "LEADPILOT_DISCOVERY_USER_AGENT",
+                "LeadPilot/0.1 Website Discovery",
+            ).strip(),
+            discovery_retry_count=int(
+                os.getenv("LEADPILOT_DISCOVERY_RETRY_COUNT", "1")
+            ),
+            discovery_slow_response_ms=int(
+                os.getenv("LEADPILOT_DISCOVERY_SLOW_RESPONSE_MS", "3000")
+            ),
         )
 
     @property

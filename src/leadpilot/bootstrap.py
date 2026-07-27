@@ -6,11 +6,15 @@ from sqlalchemy import Engine
 from sqlalchemy.orm import Session, sessionmaker
 
 from leadpilot.application.companies import CompanyService
+from leadpilot.application.discovery import DiscoveryService
 from leadpilot.application.health import HealthCheckService
 from leadpilot.config import Settings, get_settings
 from leadpilot.infrastructure.database.company_repository import CompanyRepository
+from leadpilot.infrastructure.database.discovery_repository import DiscoveryRepository
 from leadpilot.infrastructure.database.engine import create_database_engine
 from leadpilot.infrastructure.database.session import create_session_factory
+from leadpilot.infrastructure.discovery_client import WebsiteClient
+from leadpilot.infrastructure.discovery_scanner import WebsiteScanner
 from leadpilot.logging import configure_logging
 
 
@@ -21,6 +25,7 @@ class Container:
     session_factory: sessionmaker[Session]
     health_check: HealthCheckService
     companies: CompanyService
+    discovery: DiscoveryService
 
     def dispose(self) -> None:
         self.engine.dispose()
@@ -31,10 +36,27 @@ def bootstrap(settings: Settings | None = None) -> Container:
     configure_logging(resolved_settings.numeric_log_level)
     engine = create_database_engine(resolved_settings.database_url)
     session_factory = create_session_factory(engine)
+    company_repository = CompanyRepository(session_factory)
+    client = WebsiteClient(
+        connect_timeout=resolved_settings.discovery_connect_timeout,
+        read_timeout=resolved_settings.discovery_read_timeout,
+        max_response_bytes=resolved_settings.discovery_max_response_bytes,
+        user_agent=resolved_settings.discovery_user_agent,
+        retry_count=resolved_settings.discovery_retry_count,
+    )
     return Container(
         settings=resolved_settings,
         engine=engine,
         session_factory=session_factory,
         health_check=HealthCheckService(engine, resolved_settings.environment),
-        companies=CompanyService(CompanyRepository(session_factory)),
+        companies=CompanyService(company_repository),
+        discovery=DiscoveryService(
+            DiscoveryRepository(session_factory),
+            company_repository,
+            WebsiteScanner(
+                client,
+                max_pages=resolved_settings.discovery_max_pages,
+                slow_ms=resolved_settings.discovery_slow_response_ms,
+            ),
+        ),
     )

@@ -95,6 +95,23 @@ def render(container: Container) -> None:
             st.divider()
 
     section_header("Quick Actions", "Move directly to your next task.")
+    discovery_summary = container.discovery.dashboard_summary()
+    section_header("Discovery Intelligence", "Website-observable lead intelligence.")
+    discovery_columns = st.columns(3)
+    for column, (label, value) in zip(
+        discovery_columns,
+        (
+            ("Completed Scans", discovery_summary.completed),
+            ("High Priority Leads", discovery_summary.high_priority),
+            (
+                "Average Automation Potential",
+                discovery_summary.average_automation_potential,
+            ),
+        ),
+        strict=True,
+    ):
+        with column:
+            kpi_card(label, value, "⌕")
     add, companies, discovery, _ = st.columns(4)
     if add.button("＋ Add Company", type="primary", use_container_width=True):
         open_company_mode(st.session_state, "add")

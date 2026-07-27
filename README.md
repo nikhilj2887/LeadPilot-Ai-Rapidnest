@@ -1,27 +1,24 @@
 # LeadPilot AI
 
-LeadPilot AI is RapidNest's lead-intelligence application. Milestone 3 adds a
-polished, responsive B2B SaaS interface to the persisted company pipeline while
-keeping the modular-monolith architecture and existing business rules intact.
+LeadPilot AI is RapidNest's lead-intelligence application. Milestone 4 adds
+deterministic public-website discovery and explainable lead scoring to the
+persisted company pipeline.
 
-## Milestone 3 UI features
+## Milestone 4 website discovery
 
-- A single branded application shell with responsive navigation, dark-mode-aware
-  styling, and discreet environment and database health.
-- A dashboard with five pipeline KPIs, all seven company statuses, recent
-  companies, quick actions, and a useful zero-data experience.
-- A professional Companies workspace with search, status/industry/country
-  filters, five sort options, result counts, and ten-record pagination.
-- Guided add and edit forms, a complete company profile, friendly validation
-  messages, and explicit confirmation before deletion.
-- Reusable page headers, KPI cards, badges, empty states, alerts, form sections,
-  confirmation panels, and pagination behavior.
-- Health-oriented Settings cards and polished previews for future Discovery and
-  Proposals capabilities.
+- Run a synchronous scan for an existing company, retain scan history, and view
+  the latest result on Company detail, Discovery, and Dashboard screens.
+- Inspect the homepage, `robots.txt`, `sitemap.xml`, and up to eight relevant
+  same-domain pages without JavaScript execution, form submission, or login.
+- Extract metadata, business pages, contact details, social links, engagement
+  signals, and evidence-backed technology indicators.
+- Produce Website Health, Digital Maturity, AI Readiness, Automation Potential,
+  and Lead Priority scores with ratings, factors, and concise explanations.
+- Generate evidence-linked findings and RapidNest opportunities using rules.
 
-Discovery and Proposals are deliberately non-functional placeholders in this
-milestone. They do not make external calls, run AI behavior, generate proposals,
-or export files.
+Discovery uses no OpenAI, Anthropic, Gemini, or other AI provider. All scores
+are deterministic, website-observable indicators and must not be interpreted as
+knowledge of a company's internal systems. Proposals remains a placeholder.
 
 ## Prerequisites (macOS)
 
@@ -69,10 +66,9 @@ Streamlit prints the local URL (normally `http://localhost:8501`) in the termina
 
 Presentation modules call application services only. SQLAlchemy models,
 sessions, and queries remain inside `infrastructure/database`; the application
-layer has no Streamlit dependency. Styling and reusable UI helpers are separate
-from company business logic, and database changes continue to be managed only
-through Alembic. Milestone 3 adds no schema, business entities, authentication,
-external APIs, AI providers, workers, contacts, or proposal functionality.
+layer has no Streamlit dependency. Discovery orchestration, HTTP fetching, URL
+security, HTML analysis, technology detection, scoring, persistence, and UI
+rendering are separate modules. Database changes are managed only with Alembic.
 
 ## Configuration
 
@@ -84,6 +80,13 @@ Configuration is loaded from environment variables and an optional `.env` file. 
 | `LEADPILOT_LOG_LEVEL` | `INFO` | Structured logging threshold |
 | `LEADPILOT_DATABASE_URL` | `sqlite:///./data/leadpilot.db` | SQLAlchemy database URL |
 | `LEADPILOT_APP_NAME` | `LeadPilot AI` | Application display name |
+| `LEADPILOT_DISCOVERY_CONNECT_TIMEOUT` | `5` | Connect timeout in seconds |
+| `LEADPILOT_DISCOVERY_READ_TIMEOUT` | `10` | Read timeout in seconds |
+| `LEADPILOT_DISCOVERY_MAX_PAGES` | `9` | Maximum pages including homepage |
+| `LEADPILOT_DISCOVERY_MAX_RESPONSE_BYTES` | `2000000` | Per-response size limit |
+| `LEADPILOT_DISCOVERY_USER_AGENT` | `LeadPilot/0.1 Website Discovery` | Scanner identity |
+| `LEADPILOT_DISCOVERY_RETRY_COUNT` | `1` | Safe transient retry count |
+| `LEADPILOT_DISCOVERY_SLOW_RESPONSE_MS` | `3000` | Slow response scoring threshold |
 
 ## Database migrations
 
@@ -99,7 +102,26 @@ Create a future migration after adding SQLAlchemy models:
 python -m alembic revision --autogenerate -m "describe the schema change"
 ```
 
-The migration history contains the Milestone 1 baseline and the Milestone 2 `companies` table. Apply migrations before starting the application after every pull.
+The discovery migration adds company-owned scan records. The foreign key uses
+`ON DELETE CASCADE`, with SQLite foreign keys explicitly enabled, so deleting a
+company deliberately deletes its scan history.
+
+## Discovery security and limitations
+
+Discovery accepts only HTTP(S), resolves the hostname before each request, and
+rejects loopback, private, link-local, reserved, multicast, and other non-global
+addresses. Every redirect target is independently validated. TLS verification
+remains enabled, response bodies are size-limited, HTML content is required for
+pages, crawling stays on the same hostname, scripts are never executed, and raw
+HTML, cookies, authorization headers, tokens, and stack traces are not stored.
+
+Pre-request DNS checks substantially reduce SSRF risk but cannot eliminate DNS
+rebinding between validation and connection because the HTTP transport performs
+its own DNS lookup. Production deployments should also enforce outbound network
+controls or use a resolver-pinned transport. The scanner does not execute
+JavaScript, so client-rendered signals may be absent. Technology detection is
+indicator-based and absence of a visible tool does not prove it is absent
+internally.
 
 ## Company data
 
@@ -107,5 +129,5 @@ Companies require a unique name and one of these pipeline statuses: `New`, `Rese
 
 Websites may be entered with or without a scheme; bare domains such as `example.com` are normalized to `https://example.com`. Industry, country, city, company size, source, and notes are optional. Company names are treated as case-insensitively unique by the application.
 
-This milestone intentionally does not add contacts, authentication, scoring,
-proposal generation, external AI providers, or integrations.
+Discovery runs synchronously in Milestone 4; there are no workers, queues,
+schedules, search-engine scraping, proposal generation, or external AI providers.
