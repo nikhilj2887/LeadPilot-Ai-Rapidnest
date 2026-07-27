@@ -18,7 +18,7 @@ class Settings:
     database_url: str
 
     @classmethod
-    def from_env(cls, env_file: str | None = ".env") -> "Settings":
+    def from_env(cls, env_file: str | None = ".env") -> Settings:
         if env_file:
             load_dotenv(env_file, override=False)
 

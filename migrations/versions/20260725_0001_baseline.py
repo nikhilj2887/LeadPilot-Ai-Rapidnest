@@ -5,7 +5,7 @@ Revises:
 Create Date: 2026-07-25
 """
 
-from typing import Sequence
+from collections.abc import Sequence
 
 revision: str = "20260725_0001"
 down_revision: str | None = None

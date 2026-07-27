@@ -1,14 +1,27 @@
 # LeadPilot AI
 
-LeadPilot AI is RapidNest's lead-intelligence application. Milestone 2 adds a complete company pipeline to the production-oriented foundation: persisted companies, application services, Streamlit CRUD workflows, and dashboard metrics.
+LeadPilot AI is RapidNest's lead-intelligence application. Milestone 3 adds a
+polished, responsive B2B SaaS interface to the persisted company pipeline while
+keeping the modular-monolith architecture and existing business rules intact.
 
-## Milestone 2 features
+## Milestone 3 UI features
 
-- Create, browse, search, update, and delete prospect companies.
-- Track a company's website, industry, location, size, pipeline status, source, and notes.
-- Search and filter companies, review detail views, and browse results ten at a time.
-- Monitor lead-stage counts, recent companies, and status distribution on the dashboard.
-- Persist data in SQLite through SQLAlchemy 2.x and version the schema with Alembic.
+- A single branded application shell with responsive navigation, dark-mode-aware
+  styling, and discreet environment and database health.
+- A dashboard with five pipeline KPIs, all seven company statuses, recent
+  companies, quick actions, and a useful zero-data experience.
+- A professional Companies workspace with search, status/industry/country
+  filters, five sort options, result counts, and ten-record pagination.
+- Guided add and edit forms, a complete company profile, friendly validation
+  messages, and explicit confirmation before deletion.
+- Reusable page headers, KPI cards, badges, empty states, alerts, form sections,
+  confirmation panels, and pagination behavior.
+- Health-oriented Settings cards and polished previews for future Discovery and
+  Proposals capabilities.
+
+Discovery and Proposals are deliberately non-functional placeholders in this
+milestone. They do not make external calls, run AI behavior, generate proposals,
+or export files.
 
 ## Prerequisites (macOS)
 
@@ -47,8 +60,19 @@ Streamlit prints the local URL (normally `http://localhost:8501`) in the termina
 ## Run tests
 
 ```bash
-python -m pytest
+.venv/bin/python -m pytest
+.venv/bin/ruff check .
+.venv/bin/ruff format --check .
 ```
+
+## Architecture boundaries
+
+Presentation modules call application services only. SQLAlchemy models,
+sessions, and queries remain inside `infrastructure/database`; the application
+layer has no Streamlit dependency. Styling and reusable UI helpers are separate
+from company business logic, and database changes continue to be managed only
+through Alembic. Milestone 3 adds no schema, business entities, authentication,
+external APIs, AI providers, workers, contacts, or proposal functionality.
 
 ## Configuration
 
@@ -83,4 +107,5 @@ Companies require a unique name and one of these pipeline statuses: `New`, `Rese
 
 Websites may be entered with or without a scheme; bare domains such as `example.com` are normalized to `https://example.com`. Industry, country, city, company size, source, and notes are optional. Company names are treated as case-insensitively unique by the application.
 
-This milestone intentionally does not add contacts, authentication, scoring, proposals, external AI providers, or integrations.
+This milestone intentionally does not add contacts, authentication, scoring,
+proposal generation, external AI providers, or integrations.

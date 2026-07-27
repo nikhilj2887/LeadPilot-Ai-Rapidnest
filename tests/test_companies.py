@@ -284,4 +284,4 @@ def test_only_one_navigation_menu_is_defined() -> None:
         path.read_text()
         for path in (root / "src/leadpilot/presentation/streamlit").rglob("*.py")
     )
-    assert streamlit_source.count('st.sidebar.radio("Navigation"') == 1
+    assert streamlit_source.count("st.sidebar.radio(") == 1

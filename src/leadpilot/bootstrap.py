@@ -5,11 +5,11 @@ from dataclasses import dataclass
 from sqlalchemy import Engine
 from sqlalchemy.orm import Session, sessionmaker
 
-from leadpilot.application.health import HealthCheckService
 from leadpilot.application.companies import CompanyService
+from leadpilot.application.health import HealthCheckService
 from leadpilot.config import Settings, get_settings
-from leadpilot.infrastructure.database.engine import create_database_engine
 from leadpilot.infrastructure.database.company_repository import CompanyRepository
+from leadpilot.infrastructure.database.engine import create_database_engine
 from leadpilot.infrastructure.database.session import create_session_factory
 from leadpilot.logging import configure_logging
 

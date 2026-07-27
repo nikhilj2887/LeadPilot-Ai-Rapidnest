@@ -5,10 +5,10 @@ Revises: 20260725_0001
 Create Date: 2026-07-25
 """
 
-from typing import Sequence
+from collections.abc import Sequence
 
-from alembic import op
 import sqlalchemy as sa
+from alembic import op
 
 revision: str = "20260725_0002"
 down_revision: str | None = "20260725_0001"
