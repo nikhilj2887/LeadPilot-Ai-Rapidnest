@@ -13,7 +13,7 @@ from leadpilot.application.discovery import (
     DiscoverySummary,
     utcnow,
 )
-from leadpilot.infrastructure.database.models import DiscoveryScanModel
+from leadpilot.infrastructure.database.models import CompanyModel, DiscoveryScanModel
 
 JSON_FIELDS = {
     "detected_technologies",
@@ -26,6 +26,7 @@ JSON_FIELDS = {
 }
 RESULT_FIELDS = {column.name for column in DiscoveryScanModel.__table__.columns} - {
     "id",
+    "organization_id",
     "company_id",
     "website_url",
     "status",
@@ -38,12 +39,27 @@ RESULT_FIELDS = {column.name for column in DiscoveryScanModel.__table__.columns}
 
 
 class DiscoveryRepository:
-    def __init__(self, session_factory: Callable[[], Session]) -> None:
+    def __init__(
+        self, session_factory: Callable[[], Session], organization_id: int = 1
+    ) -> None:
         self._session_factory = session_factory
+        self.organization_id = organization_id
 
     def create(self, company_id: int, website_url: str) -> DiscoveryScan:
         with self._session_factory() as session, session.begin():
-            model = DiscoveryScanModel(company_id=company_id, website_url=website_url)
+            company = session.scalar(
+                select(CompanyModel.id).where(
+                    CompanyModel.id == company_id,
+                    CompanyModel.organization_id == self.organization_id,
+                )
+            )
+            if company is None:
+                raise LookupError("Company was not found in this organization")
+            model = DiscoveryScanModel(
+                organization_id=self.organization_id,
+                company_id=company_id,
+                website_url=website_url,
+            )
             session.add(model)
             session.flush()
             session.refresh(model)
@@ -105,13 +121,14 @@ class DiscoveryRepository:
 
     def get_by_id(self, scan_id: int) -> DiscoveryScan | None:
         with self._session_factory() as session:
-            model = session.get(DiscoveryScanModel, scan_id)
+            model = self._find(session, scan_id)
             return self._to_scan(model) if model else None
 
     def get_latest_by_company(self, company_id: int) -> DiscoveryScan | None:
         scans = self._list(
             select(DiscoveryScanModel)
             .where(DiscoveryScanModel.company_id == company_id)
+            .where(DiscoveryScanModel.organization_id == self.organization_id)
             .order_by(
                 DiscoveryScanModel.created_at.desc(), DiscoveryScanModel.id.desc()
             )
@@ -123,12 +140,14 @@ class DiscoveryRepository:
         return self._list(
             select(DiscoveryScanModel)
             .where(DiscoveryScanModel.company_id == company_id)
+            .where(DiscoveryScanModel.organization_id == self.organization_id)
             .order_by(DiscoveryScanModel.created_at.desc())
         )
 
     def list_recent(self, limit: int = 50) -> list[DiscoveryScan]:
         return self._list(
             select(DiscoveryScanModel)
+            .where(DiscoveryScanModel.organization_id == self.organization_id)
             .order_by(
                 DiscoveryScanModel.created_at.desc(), DiscoveryScanModel.id.desc()
             )
@@ -137,25 +156,35 @@ class DiscoveryRepository:
 
     def list_by_status(self, status: str) -> list[DiscoveryScan]:
         return self._list(
-            select(DiscoveryScanModel).where(DiscoveryScanModel.status == status)
+            select(DiscoveryScanModel).where(
+                DiscoveryScanModel.organization_id == self.organization_id,
+                DiscoveryScanModel.status == status,
+            )
         )
 
     def count(self) -> int:
         with self._session_factory() as session:
-            return session.scalar(select(func.count(DiscoveryScanModel.id))) or 0
+            return (
+                session.scalar(
+                    select(func.count(DiscoveryScanModel.id)).where(
+                        DiscoveryScanModel.organization_id == self.organization_id
+                    )
+                )
+                or 0
+            )
 
     def count_by_status(self) -> dict[str, int]:
         with self._session_factory() as session:
             rows = session.execute(
-                select(
-                    DiscoveryScanModel.status, func.count(DiscoveryScanModel.id)
-                ).group_by(DiscoveryScanModel.status)
+                select(DiscoveryScanModel.status, func.count(DiscoveryScanModel.id))
+                .where(DiscoveryScanModel.organization_id == self.organization_id)
+                .group_by(DiscoveryScanModel.status)
             )
             return dict(rows)
 
     def delete(self, scan_id: int) -> bool:
         with self._session_factory() as session, session.begin():
-            model = session.get(DiscoveryScanModel, scan_id)
+            model = self._find(session, scan_id)
             if model is None:
                 return False
             session.delete(model)
@@ -195,7 +224,7 @@ class DiscoveryRepository:
                         func.avg(DiscoveryScanModel.ai_readiness_score).filter(
                             DiscoveryScanModel.status == "Completed"
                         ),
-                    )
+                    ).where(DiscoveryScanModel.organization_id == self.organization_id)
                 ).one()
             )
         return DiscoverySummary(
@@ -213,12 +242,19 @@ class DiscoveryRepository:
         with self._session_factory() as session:
             return [self._to_scan(model) for model in session.scalars(statement)]
 
-    @staticmethod
-    def _required(session: Session, scan_id: int) -> DiscoveryScanModel:
-        model = session.get(DiscoveryScanModel, scan_id)
+    def _required(self, session: Session, scan_id: int) -> DiscoveryScanModel:
+        model = self._find(session, scan_id)
         if model is None:
             raise LookupError(f"Discovery scan {scan_id} was not found")
         return model
+
+    def _find(self, session: Session, scan_id: int) -> DiscoveryScanModel | None:
+        return session.scalar(
+            select(DiscoveryScanModel).where(
+                DiscoveryScanModel.id == scan_id,
+                DiscoveryScanModel.organization_id == self.organization_id,
+            )
+        )
 
     def _detach(self, session: Session, model: DiscoveryScanModel) -> DiscoveryScan:
         result = self._to_scan(model)
@@ -229,6 +265,7 @@ class DiscoveryRepository:
     def _to_scan(model: DiscoveryScanModel) -> DiscoveryScan:
         excluded = {
             "id",
+            "organization_id",
             "company_id",
             "website_url",
             "status",
@@ -254,6 +291,7 @@ class DiscoveryRepository:
             data.pop(key, None)
         return DiscoveryScan(
             id=model.id,
+            organization_id=model.organization_id,
             company_id=model.company_id,
             website_url=model.website_url,
             status=model.status,

@@ -345,5 +345,72 @@ support the sales journey from research to proposal.
 
 Built by **RapidNest Software Solutions**
 
+## Multi-tenant organization foundation
+
+LeadPilot stores customer workspaces as Organizations. RapidNest Software
+Solutions is seeded as the first active organization, together with its contact
+profile, branding reference, and service catalogue. Companies are top-level
+organization aggregates; discovery scans and AI analyses also carry an explicit
+organization foreign key so repository queries can enforce ownership even when
+called outside the UI.
+
+The application resolves an explicit, validated `OrganizationContext`. Repository
+instances are bound to that immutable organization ID, and every read, write,
+count, update, and delete includes the organization predicate. Archived
+organizations are excluded from selection and suspended organizations cannot be
+resolved. Streamlit stores only a selection from the server-provided active
+organization list; switching clears company, scan, AI, filter, and page state.
+
+The Settings page manages the selected organization profile, safe branding
+references, and its ordered active/inactive service catalogue. AI prompts load
+the selected brand, contact profile, and active services through the application
+persistence boundary. Prospect evidence and organization text are delimited as
+untrusted data, and the model is instructed not to invent services or disclose
+internal configuration.
+
+### Migration and existing data
+
+Migration `20260728_0005` creates the organization tables, seeds RapidNest, adds
+nullable organization keys to existing organization-owned tables, backfills
+every existing company, discovery scan, and AI analysis to RapidNest, and only
+then makes the keys required and adds foreign keys/indexes. Company name and
+website uniqueness are scoped to an organization. No existing lead-intelligence
+records are deleted. The SQLite-compatible downgrade returns to the legacy
+single-organization schema, but necessarily discards organization metadata and
+separation; it is intended only for local rollback.
+
+### Development organization
+
+After upgrading the database, create a distinct local organization without
+company data:
+
+```bash
+.venv/bin/python -m leadpilot.infrastructure.demo_organization
+```
+
+Remove that demo organization and any data deliberately created inside it:
+
+```bash
+.venv/bin/python -m leadpilot.infrastructure.demo_organization --remove
+```
+
+The demo seed is never run by production migrations.
+
+### Authentication and limitations
+
+This milestone provides tenant-aware data isolation but not production-grade
+user authentication. The local organization switcher is a development and
+single-user navigation facility; it is not authorization. A future milestone
+must map authenticated users to organization memberships and roles before
+exposing this deployment to multiple untrusted users. Billing, invitations,
+usage limits, per-organization AI credentials, and role administration are also
+out of scope.
+
+Organization-controlled text is rendered through normal Streamlit APIs rather
+than injected as HTML. Logo references are limited to relative paths below the
+approved assets directory, and the existing LeadPilot logo is used for the
+RapidNest seed. Secrets remain in environment configuration and are never copied
+into organization records or AI prompts.
+
 - Website: [https://www.therapidnest.com](https://www.therapidnest.com)
 - Email: [contact@therapidnest.com](mailto:contact@therapidnest.com)

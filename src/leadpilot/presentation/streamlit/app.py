@@ -9,6 +9,7 @@ import streamlit as st
 from leadpilot.bootstrap import Container, bootstrap
 from leadpilot.presentation.streamlit.components import health_badge
 from leadpilot.presentation.streamlit.navigation import PAGES, navigation_label
+from leadpilot.presentation.streamlit.state import switch_organization
 from leadpilot.presentation.streamlit.theme import apply_theme
 
 logger = logging.getLogger(__name__)
@@ -18,8 +19,8 @@ ICON_PATH = ASSET_DIRECTORY / "leadpilot-icon.png"
 
 
 @st.cache_resource
-def get_container() -> Container:
-    return bootstrap()
+def get_container(organization_id: int | None = None) -> Container:
+    return bootstrap(organization_id=organization_id)
 
 
 def render_page_safely(
@@ -49,7 +50,15 @@ def main() -> None:
     )
     apply_theme()
     try:
-        container = get_container()
+        default_container = get_container()
+        active = default_container.organizations.list_active()
+        valid_ids = {organization.id for organization in active}
+        requested_id = st.session_state.get(
+            "organization_id", default_container.organization_context.organization_id
+        )
+        if requested_id not in valid_ids:
+            requested_id = default_container.organization_context.organization_id
+        container = get_container(requested_id)
     except Exception:
         logger.exception("LeadPilot startup failed")
         st.error("LeadPilot could not start. Check the application logs for details.")
@@ -65,6 +74,22 @@ def main() -> None:
         '<div class="lp-product-subtitle">Lead Intelligence Workspace</div>',
         unsafe_allow_html=True,
     )
+    if len(active) > 1:
+        names = {item.id: item.display_name for item in active}
+        chosen = st.sidebar.selectbox(
+            "Organization",
+            [item.id for item in active],
+            index=[item.id for item in active].index(requested_id),
+            format_func=names.__getitem__,
+        )
+        if chosen != requested_id and switch_organization(
+            st.session_state, chosen, valid_ids
+        ):
+            st.rerun()
+    else:
+        st.sidebar.caption(
+            f"Organization · {container.organization_context.organization.display_name}"
+        )
     selected_page = st.sidebar.radio(
         "Navigation",
         list(PAGES),

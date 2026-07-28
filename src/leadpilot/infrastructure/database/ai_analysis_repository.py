@@ -9,7 +9,11 @@ from sqlalchemy.orm import Session
 
 from leadpilot.application.discovery import utcnow
 from leadpilot.application.discovery_ai import AI_STATUSES, DiscoveryAIAnalysis
-from leadpilot.infrastructure.database.models import DiscoveryAIAnalysisModel
+from leadpilot.infrastructure.database.models import (
+    CompanyModel,
+    DiscoveryAIAnalysisModel,
+    DiscoveryScanModel,
+)
 
 JSON_FIELDS = {
     "digital_strengths",
@@ -27,12 +31,33 @@ JSON_FIELDS = {
 
 
 class AIAnalysisRepository:
-    def __init__(self, session_factory: Callable[[], Session]) -> None:
+    def __init__(
+        self, session_factory: Callable[[], Session], organization_id: int = 1
+    ) -> None:
         self._session_factory = session_factory
+        self.organization_id = organization_id
 
     def create(self, **values: Any) -> DiscoveryAIAnalysis:
         with self._session_factory() as session, session.begin():
-            model = DiscoveryAIAnalysisModel(**values)
+            company_id = values.get("company_id")
+            scan_id = values.get("discovery_scan_id")
+            parents = session.scalar(
+                select(func.count(DiscoveryScanModel.id))
+                .join(CompanyModel, CompanyModel.id == DiscoveryScanModel.company_id)
+                .where(
+                    DiscoveryScanModel.id == scan_id,
+                    DiscoveryScanModel.organization_id == self.organization_id,
+                    CompanyModel.id == company_id,
+                    CompanyModel.organization_id == self.organization_id,
+                )
+            )
+            if parents != 1:
+                raise LookupError(
+                    "Company and discovery scan were not found in this organization"
+                )
+            model = DiscoveryAIAnalysisModel(
+                organization_id=self.organization_id, **values
+            )
             session.add(model)
             session.flush()
             session.refresh(model)
@@ -88,7 +113,7 @@ class AIAnalysisRepository:
 
     def get_by_id(self, analysis_id: int) -> DiscoveryAIAnalysis | None:
         with self._session_factory() as session:
-            model = session.get(DiscoveryAIAnalysisModel, analysis_id)
+            model = self._find(session, analysis_id)
             return self._to_entity(model) if model else None
 
     def get_latest_by_scan(self, scan_id: int) -> DiscoveryAIAnalysis | None:
@@ -100,7 +125,10 @@ class AIAnalysisRepository:
     def list_by_scan(self, scan_id: int) -> list[DiscoveryAIAnalysis]:
         return self._list(
             select(DiscoveryAIAnalysisModel)
-            .where(DiscoveryAIAnalysisModel.discovery_scan_id == scan_id)
+            .where(
+                DiscoveryAIAnalysisModel.organization_id == self.organization_id,
+                DiscoveryAIAnalysisModel.discovery_scan_id == scan_id,
+            )
             .order_by(
                 DiscoveryAIAnalysisModel.created_at.desc(),
                 DiscoveryAIAnalysisModel.id.desc(),
@@ -110,13 +138,17 @@ class AIAnalysisRepository:
     def list_by_company(self, company_id: int) -> list[DiscoveryAIAnalysis]:
         return self._list(
             select(DiscoveryAIAnalysisModel)
-            .where(DiscoveryAIAnalysisModel.company_id == company_id)
+            .where(
+                DiscoveryAIAnalysisModel.organization_id == self.organization_id,
+                DiscoveryAIAnalysisModel.company_id == company_id,
+            )
             .order_by(DiscoveryAIAnalysisModel.created_at.desc())
         )
 
     def list_recent(self, limit: int = 20) -> list[DiscoveryAIAnalysis]:
         return self._list(
             select(DiscoveryAIAnalysisModel)
+            .where(DiscoveryAIAnalysisModel.organization_id == self.organization_id)
             .order_by(DiscoveryAIAnalysisModel.created_at.desc())
             .limit(limit)
         )
@@ -124,17 +156,25 @@ class AIAnalysisRepository:
     def list_by_status(self, status: str) -> list[DiscoveryAIAnalysis]:
         return self._list(
             select(DiscoveryAIAnalysisModel).where(
-                DiscoveryAIAnalysisModel.status == status
+                DiscoveryAIAnalysisModel.organization_id == self.organization_id,
+                DiscoveryAIAnalysisModel.status == status,
             )
         )
 
     def count(self) -> int:
         with self._session_factory() as session:
-            return session.scalar(select(func.count(DiscoveryAIAnalysisModel.id))) or 0
+            return (
+                session.scalar(
+                    select(func.count(DiscoveryAIAnalysisModel.id)).where(
+                        DiscoveryAIAnalysisModel.organization_id == self.organization_id
+                    )
+                )
+                or 0
+            )
 
     def delete(self, analysis_id: int) -> bool:
         with self._session_factory() as session, session.begin():
-            model = session.get(DiscoveryAIAnalysisModel, analysis_id)
+            model = self._find(session, analysis_id)
             if not model:
                 return False
             session.delete(model)
@@ -157,8 +197,10 @@ class AIAnalysisRepository:
         with self._session_factory() as session:
             rows = dict(
                 session.execute(
-                    select(DiscoveryAIAnalysisModel.status, func.count()).group_by(
-                        DiscoveryAIAnalysisModel.status
+                    select(DiscoveryAIAnalysisModel.status, func.count())
+                    .group_by(DiscoveryAIAnalysisModel.status)
+                    .where(
+                        DiscoveryAIAnalysisModel.organization_id == self.organization_id
                     )
                 ).all()
             )
@@ -181,7 +223,10 @@ class AIAnalysisRepository:
     def _first(self, criterion: Any) -> DiscoveryAIAnalysis | None:
         rows = self._list(
             select(DiscoveryAIAnalysisModel)
-            .where(criterion)
+            .where(
+                DiscoveryAIAnalysisModel.organization_id == self.organization_id,
+                criterion,
+            )
             .order_by(
                 DiscoveryAIAnalysisModel.created_at.desc(),
                 DiscoveryAIAnalysisModel.id.desc(),
@@ -194,12 +239,21 @@ class AIAnalysisRepository:
         with self._session_factory() as session:
             return [self._to_entity(x) for x in session.scalars(statement)]
 
-    @staticmethod
-    def _required(session: Session, analysis_id: int) -> DiscoveryAIAnalysisModel:
-        model = session.get(DiscoveryAIAnalysisModel, analysis_id)
+    def _required(self, session: Session, analysis_id: int) -> DiscoveryAIAnalysisModel:
+        model = self._find(session, analysis_id)
         if model is None:
             raise LookupError("AI analysis not found")
         return model
+
+    def _find(
+        self, session: Session, analysis_id: int
+    ) -> DiscoveryAIAnalysisModel | None:
+        return session.scalar(
+            select(DiscoveryAIAnalysisModel).where(
+                DiscoveryAIAnalysisModel.id == analysis_id,
+                DiscoveryAIAnalysisModel.organization_id == self.organization_id,
+            )
+        )
 
     def _detach(
         self, session: Session, model: DiscoveryAIAnalysisModel
@@ -212,6 +266,7 @@ class AIAnalysisRepository:
     def _to_entity(model: DiscoveryAIAnalysisModel) -> DiscoveryAIAnalysis:
         fixed = {
             "id",
+            "organization_id",
             "discovery_scan_id",
             "company_id",
             "status",
