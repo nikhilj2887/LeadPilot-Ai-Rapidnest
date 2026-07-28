@@ -11,7 +11,7 @@ APP_CSS = """
   --lp-muted: #8b8b9e;
 }
 [data-testid="stHeader"] { background: transparent; }
-[data-testid="stToolbar"], #MainMenu, footer { visibility: hidden; }
+#MainMenu, footer { visibility: hidden; }
 [data-testid="stSidebarNav"] { display: none; }
 [data-testid="stAppViewContainer"] > .main .block-container {
   width:100%; max-width:1560px; padding:2rem clamp(1.25rem, 3vw, 3rem) 4rem;
@@ -28,6 +28,29 @@ APP_CSS = """
 .lp-product-subtitle {
   margin:-.45rem 0 1rem; color:var(--lp-muted); font-size:.82rem;
   line-height:1.4; text-align:center;
+}
+.lp-organization {
+  margin:.15rem 0 .65rem; padding:.85rem .9rem;
+  border:1px solid rgba(125,125,145,.28); border-radius:11px;
+  background:rgba(109,93,252,.07); overflow:hidden;
+}
+.lp-organization-label {
+  color:var(--lp-muted); font-size:.72rem; font-weight:700;
+  letter-spacing:.06em; line-height:1.2; text-transform:uppercase;
+}
+.lp-organization-name {
+  margin-top:.32rem; color:rgba(250,250,255,.96); font-size:.9rem;
+  font-weight:650; line-height:1.35; overflow:hidden;
+  text-overflow:ellipsis; white-space:nowrap;
+}
+[data-testid="stSidebar"] [data-testid="stSelectbox"] {
+  width:100%; margin:0 0 .9rem;
+}
+[data-testid="stSidebar"] [data-testid="stSelectbox"] > div {
+  width:100%; min-width:0;
+}
+[data-testid="stSidebar"] [data-testid="stSelectbox"] [role="combobox"]:focus-visible {
+  outline:3px solid rgba(109,93,252,.72); outline-offset:2px;
 }
 .lp-eyebrow { color:var(--lp-accent); font-size:.8rem; font-weight:700; letter-spacing:.035em; }
 .lp-page-header { margin-bottom: 1.35rem; }

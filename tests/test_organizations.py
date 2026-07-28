@@ -104,6 +104,16 @@ def test_context_rejects_inactive_and_switch_resets_state(repositories) -> None:
     assert not switch_organization(state, 999, {1, 2})
 
 
+def test_active_organization_list_excludes_suspended_and_archived(
+    repositories,
+) -> None:
+    organizations, first, second = repositories
+    with first._session_factory() as session, session.begin():
+        session.get(OrganizationModel, first.organization_id).status = "suspended"
+        session.get(OrganizationModel, second.organization_id).status = "archived"
+    assert organizations.list_active() == []
+
+
 def test_migration_seeds_and_backfills_existing_data(
     tmp_path: Path, monkeypatch
 ) -> None:

@@ -3,7 +3,10 @@ from pathlib import Path
 from types import SimpleNamespace
 
 from leadpilot.application.companies import COMPANY_STATUSES, Company, CompanyMetrics
-from leadpilot.presentation.streamlit.app import render_page_safely
+from leadpilot.presentation.streamlit.app import (
+    organization_selector_required,
+    render_page_safely,
+)
 from leadpilot.presentation.streamlit.company_query import (
     PAGE_SIZE,
     build_page,
@@ -33,6 +36,7 @@ from leadpilot.presentation.streamlit.state import (
     open_company_mode,
     reset_company_filters,
     return_to_company_list,
+    switch_organization,
     sync_filter_page,
 )
 
@@ -164,6 +168,63 @@ def test_sidebar_navigation_has_accessible_active_and_focus_states() -> None:
     assert "input:focus-visible" in theme
     assert "label:not(:has(input:checked)):hover" in theme
     assert "border:1.5px solid rgba(235,235,245,.62)" in theme
+
+
+def test_sidebar_css_preserves_native_collapse_and_expand_controls() -> None:
+    root = Path(__file__).parents[1]
+    theme = (root / "src/leadpilot/presentation/streamlit/theme.py").read_text()
+    compact = "".join(theme.casefold().split())
+    assert '[data-testid="sttoolbar"]' not in compact
+    assert '[data-testid="stsidebarcollapsedcontrol"]' not in compact
+    assert '[data-testid="collapsedcontrol"]' not in compact
+    sidebar_rules = [
+        rule for rule in compact.split("}") if '[data-testid="stsidebar"]' in rule
+    ]
+    assert all("display:none" not in rule for rule in sidebar_rules)
+    assert all("visibility:hidden" not in rule for rule in sidebar_rules)
+    assert all("pointer-events:none" not in rule for rule in sidebar_rules)
+
+
+def test_organization_context_and_selector_rules_are_explicit() -> None:
+    root = Path(__file__).parents[1]
+    app_source = (root / "src/leadpilot/presentation/streamlit/app.py").read_text()
+    assert "lp-organization-label" in app_source
+    assert ">Organization</div>" in app_source
+    assert "current_name" in app_source
+    assert not organization_selector_required(1)
+    assert organization_selector_required(2)
+    assert '"Switch organization"' in app_source
+
+
+def test_organization_switch_clears_owned_state_but_keeps_preferences() -> None:
+    state: dict[str, object] = {
+        "organization_id": 1,
+        "navigation": "Discovery",
+        "selected_company": 9,
+        "company_mode": "view",
+        "company_search": "keep this preference",
+        "discovery_scan_id": 21,
+        "discovery_company_id": 9,
+        "discovery_mode": "report",
+        "ai_analysis_id": 33,
+        "selected_ai_report": 33,
+        "theme_preference": "dark",
+    }
+    assert switch_organization(state, 2, {1, 2})
+    assert state["organization_id"] == 2
+    assert state["navigation"] == "Dashboard"
+    assert state["company_search"] == "keep this preference"
+    assert state["theme_preference"] == "dark"
+    for key in (
+        "selected_company",
+        "company_mode",
+        "discovery_scan_id",
+        "discovery_company_id",
+        "discovery_mode",
+        "ai_analysis_id",
+        "selected_ai_report",
+    ):
+        assert key not in state
 
 
 def test_ui_sources_include_milestone_sections_and_controls() -> None:

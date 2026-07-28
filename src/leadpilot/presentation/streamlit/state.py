@@ -55,8 +55,20 @@ def switch_organization(
         return True
     state["organization_id"] = organization_id
     state["navigation"] = "Dashboard"
+    organization_owned_prefixes = (
+        "discovery_",
+        "ai_",
+        "selected_ai",
+        "selected_scan",
+    )
+    organization_owned_keys = {
+        "selected_company",
+        "company_mode",
+        "company_flash",
+    }
     for key in tuple(state):
-        if key.startswith(("selected_company", "selected_scan", "selected_ai")):
+        if key in organization_owned_keys or key.startswith(
+            organization_owned_prefixes
+        ):
             state.pop(key, None)
-    reset_company_filters(state)
     return True

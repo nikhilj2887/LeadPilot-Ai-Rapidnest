@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import logging
 from collections.abc import Callable
+from html import escape
 from pathlib import Path
 
 import streamlit as st
@@ -21,6 +22,10 @@ ICON_PATH = ASSET_DIRECTORY / "leadpilot-icon.png"
 @st.cache_resource
 def get_container(organization_id: int | None = None) -> Container:
     return bootstrap(organization_id=organization_id)
+
+
+def organization_selector_required(active_count: int) -> bool:
+    return active_count > 1
 
 
 def render_page_safely(
@@ -74,10 +79,18 @@ def main() -> None:
         '<div class="lp-product-subtitle">Lead Intelligence Workspace</div>',
         unsafe_allow_html=True,
     )
-    if len(active) > 1:
+    current_name = container.organization_context.organization.display_name
+    st.sidebar.markdown(
+        '<div class="lp-organization">'
+        '<div class="lp-organization-label">Organization</div>'
+        f'<div class="lp-organization-name" title="{escape(current_name)}">'
+        f"{escape(current_name)}</div></div>",
+        unsafe_allow_html=True,
+    )
+    if organization_selector_required(len(active)):
         names = {item.id: item.display_name for item in active}
         chosen = st.sidebar.selectbox(
-            "Organization",
+            "Switch organization",
             [item.id for item in active],
             index=[item.id for item in active].index(requested_id),
             format_func=names.__getitem__,
@@ -86,10 +99,6 @@ def main() -> None:
             st.session_state, chosen, valid_ids
         ):
             st.rerun()
-    else:
-        st.sidebar.caption(
-            f"Organization · {container.organization_context.organization.display_name}"
-        )
     selected_page = st.sidebar.radio(
         "Navigation",
         list(PAGES),
