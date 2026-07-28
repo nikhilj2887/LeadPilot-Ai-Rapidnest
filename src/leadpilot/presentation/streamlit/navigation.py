@@ -14,11 +14,11 @@ from leadpilot.presentation.streamlit.pages import (
 PageRenderer = Callable[[Container], None]
 
 PAGE_ICONS = {
-    "Dashboard": "◫",
-    "Companies": "▦",
-    "Discovery": "⌕",
-    "Proposals": "▤",
-    "Settings": "⚙",
+    "Dashboard": "Home",
+    "Companies": "Companies",
+    "Discovery": "Discovery",
+    "Proposals": "Proposals",
+    "Settings": "Settings",
 }
 
 PAGES: dict[str, PageRenderer] = {
@@ -31,4 +31,4 @@ PAGES: dict[str, PageRenderer] = {
 
 
 def navigation_label(page: str) -> str:
-    return f"{PAGE_ICONS[page]}  {page}"
+    return PAGE_ICONS[page]

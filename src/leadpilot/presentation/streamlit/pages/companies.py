@@ -32,6 +32,7 @@ from leadpilot.presentation.streamlit.components import (
 )
 from leadpilot.presentation.streamlit.state import (
     FILTER_DEFAULTS,
+    navigate,
     open_company_mode,
     reset_company_filters,
     return_to_company_list,
@@ -209,6 +210,48 @@ def _detail(container: Container, company: Company) -> None:
         f'<div class="lp-panel">{escape(company.notes or "No notes have been added.")}</div>',
         unsafe_allow_html=True,
     )
+
+    section_header("Discovery", "Latest public website intelligence for this company.")
+    latest = container.discovery.latest_for_company(company.id)
+    if latest:
+        st.markdown(status_badge(latest.status), unsafe_allow_html=True)
+        _score_columns = st.columns(5)
+        for column, (label, value) in zip(
+            _score_columns,
+            (
+                ("Health", latest.website_health_score),
+                ("Maturity", latest.digital_maturity_score),
+                ("AI Readiness", latest.ai_readiness_score),
+                ("Automation", latest.automation_potential_score),
+                ("Lead Priority", latest.lead_priority_score),
+            ),
+            strict=True,
+        ):
+            with column:
+                kpi_card(label, value, "⌕")
+        view, run, _ = st.columns([1.8, 1.2, 4])
+        if view.button(
+            "View Full Discovery Report", key=f"company-report-{company.id}"
+        ):
+            st.session_state.discovery_mode = "report"
+            st.session_state.discovery_scan_id = latest.id
+            navigate(st.session_state, "Discovery")
+            st.rerun()
+        if run.button("Rescan", key=f"company-rescan-{company.id}"):
+            st.session_state.discovery_mode = "run"
+            st.session_state.discovery_company_id = company.id
+            navigate(st.session_state, "Discovery")
+            st.rerun()
+        st.caption(
+            f"{len(container.discovery.history_for_company(company.id))} scan(s) in history"
+        )
+    elif st.button(
+        "Run Discovery", key=f"company-discovery-{company.id}", type="primary"
+    ):
+        st.session_state.discovery_mode = "run"
+        st.session_state.discovery_company_id = company.id
+        navigate(st.session_state, "Discovery")
+        st.rerun()
 
     section_header("Record Metadata")
     metadata = st.columns(2)

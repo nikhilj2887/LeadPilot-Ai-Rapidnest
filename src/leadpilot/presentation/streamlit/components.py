@@ -35,10 +35,25 @@ def section_header(title: str, subtitle: str | None = None) -> None:
 
 
 def kpi_card(label: str, value: int | str, icon: str) -> None:
+    icon_html = (
+        f'<span class="lp-kpi-icon">{escape(icon)}</span>' if icon.strip() else ""
+    )
     st.markdown(
         '<div class="lp-kpi"><div class="lp-kpi-top">'
-        f'<span>{escape(label)}</span><span class="lp-kpi-icon">{escape(icon)}</span>'
+        f"<span>{escape(label)}</span>{icon_html}"
         f'</div><div class="lp-kpi-value">{escape(str(value))}</div></div>',
+        unsafe_allow_html=True,
+    )
+
+
+def score_card(label: str, value: int, rating: str, explanation: str) -> None:
+    st.markdown(
+        '<div class="lp-kpi lp-score">'
+        f'<div class="lp-kpi-top"><span>{escape(label)}</span></div>'
+        f'<div class="lp-score-value">{value}<small>/100</small></div>'
+        f'<span class="lp-badge lp-qualified">{escape(rating)}</span>'
+        f'<div class="lp-progress"><span style="width:{max(0, min(value, 100))}%"></span></div>'
+        f"<p>{escape(explanation)}</p></div>",
         unsafe_allow_html=True,
     )
 
@@ -51,7 +66,7 @@ def status_badge(status: str) -> str:
     )
 
 
-def empty_state(title: str, message: str, icon: str = "◇") -> None:
+def empty_state(title: str, message: str, icon: str = "Info") -> None:
     st.markdown(
         f'<div class="lp-empty"><div class="lp-empty-icon">{escape(icon)}</div>'
         f"<h3>{escape(title)}</h3><p>{escape(message)}</p></div>",
