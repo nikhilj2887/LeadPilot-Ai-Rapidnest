@@ -1,151 +1,305 @@
 # LeadPilot AI
 
-LeadPilot AI is RapidNest's lead-intelligence application. Milestone 4 adds
-deterministic public-website discovery and explainable lead scoring to the
-persisted company pipeline.
+![Python 3.12+](https://img.shields.io/badge/Python-3.12%2B-3776AB?logo=python&logoColor=white)
+![Streamlit](https://img.shields.io/badge/Streamlit-1.x-FF4B4B?logo=streamlit&logoColor=white)
+![SQLAlchemy 2](https://img.shields.io/badge/SQLAlchemy-2.x-D71F00)
+![Tests](https://img.shields.io/badge/pytest-85%20passing-0A9EDC?logo=pytest&logoColor=white)
+![Code style: Ruff](https://img.shields.io/badge/code%20style-Ruff-D7FF64?logo=ruff&logoColor=black)
+![Status](https://img.shields.io/badge/status-active%20development-2563EB)
 
-## Milestone 4 website discovery
+LeadPilot AI is an AI-powered Lead Intelligence Platform built by RapidNest.
 
-- Run a synchronous scan for an existing company, retain scan history, and view
-  the latest result on Company detail, Discovery, and Dashboard screens.
-- Inspect the homepage, `robots.txt`, `sitemap.xml`, and up to eight relevant
-  same-domain pages without JavaScript execution, form submission, or login.
-- Extract metadata, business pages, contact details, social links, engagement
-  signals, and evidence-backed technology indicators.
-- Produce Website Health, Digital Maturity, AI Readiness, Automation Potential,
-  and Lead Priority scores with ratings, factors, and concise explanations.
-- Generate evidence-linked findings and RapidNest opportunities using rules.
+LeadPilot AI helps software companies and consulting firms discover qualified
+prospects, analyse websites, identify digital gaps, uncover AI and automation
+opportunities, and prepare discovery insights for sales conversations.
 
-## Milestone 4.1 UX polish
+## Product Overview
 
-- Uses a responsive application canvas up to 1560px with readable typography,
-  equal-height KPI cards, balanced dashboard panels, and tablet-safe spacing.
-- Moves Discovery Intelligence higher on the Dashboard and adds completed scans,
-  high-priority leads, average automation potential, average AI readiness, and
-  recently scanned companies.
-- Presents website health, business signals, technologies, findings, contact
-  details, social links, and scan metadata as business-readable tables and cards
-  instead of raw JSON-like output.
-- Gives RapidNest Opportunities prominent evidence, outcomes, and priorities,
-  clearly framed as assessment opportunities rather than confirmed requirements.
-- Isolates page and dashboard-section failures so optional reporting errors no
-  longer appear as false application startup failures.
+LeadPilot AI is designed to help consulting and software teams:
 
-Scanning, SSRF protection, persistence, and all five scoring calculations remain
-unchanged and deterministic. No AI provider is used.
+- Manage target companies and their lead status.
+- Analyse public websites and selected internal pages.
+- Detect technologies, business signals, contact channels, and social presence.
+- Assess website health, digital maturity, and AI readiness.
+- Identify automation opportunities and prioritise leads.
+- Prepare structured discovery insights for future AI-assisted workflows and
+  proposals.
 
-Discovery uses no OpenAI, Anthropic, Gemini, or other AI provider. All scores
-are deterministic, website-observable indicators and must not be interpreted as
-knowledge of a company's internal systems. Proposals remains a placeholder.
+Discovery scoring in Milestone 4 is deterministic. Scores and recommendations
+use only publicly observable website evidence; they do not confirm or infer a
+company's internal systems as facts. No OpenAI, Anthropic, Gemini, or other AI
+provider is used in Milestone 4.
 
-## Prerequisites (macOS)
+## Current Features
 
-- macOS with [Homebrew](https://brew.sh/) installed
-- Python 3.12 or newer
-- Git
+### Company Management
 
-## Exact setup commands (macOS)
+- Add, edit, view, and delete companies.
+- Search and filter by lead attributes.
+- Sort and paginate the company directory.
+- Track companies across defined lead statuses.
+- Review complete company detail pages and discovery history.
 
-Run the following commands from Terminal:
+### Website Discovery Engine
 
-```bash
-brew install python@3.12
-git clone <repository-url> LeadPilot-Ai-Rapidnest
-cd LeadPilot-Ai-Rapidnest
-python3.12 -m venv .venv
-source .venv/bin/activate
-python -m pip install --upgrade pip
-python -m pip install -r requirements.txt
-cp .env.example .env
-python -m alembic upgrade head
+- Secure, synchronous website scanning.
+- Homepage, `robots.txt`, `sitemap.xml`, and selected same-domain page analysis.
+- Evidence-backed technology detection.
+- Business, engagement, social, and contact signal detection.
+- Stored scan history and rescanning.
+- Friendly, safely persisted failure handling.
+
+### Lead Intelligence Scoring
+
+LeadPilot AI calculates five explainable scores from 0 to 100:
+
+| Score | Purpose |
+| --- | --- |
+| Website Health Score | Evaluates public technical health, metadata, HTTPS, response status, and discoverability signals. |
+| Digital Maturity Score | Evaluates the visible platform, analytics, business content, engagement, and social footprint. |
+| AI Readiness Score | Estimates readiness using observable digital touchpoints and workflows without claiming internal knowledge. |
+| Automation Potential Score | Highlights visible opportunities where RapidNest may be able to improve customer and operational workflows. |
+| Lead Priority Score | Combines opportunity, readiness, maturity gaps, health gaps, engagement, and contactability for qualification. |
+
+Every score includes a numeric value, rating, explanation, positive factors, and
+negative factors. Findings and recommendations retain the supporting website
+evidence.
+
+### Discovery Reports
+
+Each completed scan provides:
+
+- Executive Overview
+- Website Health
+- Technology Stack
+- Business Signals
+- Customer Engagement
+- Social Presence
+- Findings
+- RapidNest Opportunities
+- Contact Information
+- Scan Metadata
+
+### Dashboard
+
+- Pipeline KPIs and company status overview.
+- Recent companies and prominent company actions.
+- Completed scan and high-priority lead metrics.
+- Average automation potential and AI readiness.
+- Recently scanned companies.
+- Responsive quick actions.
+
+## RapidNest Opportunity Areas
+
+Rule-based recommendations may identify evidence-supported assessment
+opportunities related to:
+
+- AI Chatbots
+- WhatsApp Automation
+- CRM Integration
+- Business Process Automation
+- Appointment Automation
+- Website Modernization
+- Mobile Applications
+- Cloud and Digital Transformation
+
+These recommendations are assessment opportunities derived from visible website
+signals. They are not confirmed internal requirements.
+
+## Architecture
+
+LeadPilot AI is a typed Python modular monolith using:
+
+- Python 3.12+
+- Streamlit
+- SQLAlchemy 2.x
+- Alembic
+- SQLite
+- Repository Pattern
+- Service Layer
+- pytest
+- Ruff
+
+The application separates presentation, application services, repositories,
+persistence, website fetching, SSRF validation, HTML analysis, technology
+detection, deterministic scoring, and discovery orchestration. Streamlit views
+call services and do not query SQLAlchemy directly.
+
+The boundaries support a future evolution toward FastAPI, React, PostgreSQL,
+background workers, and multi-user SaaS deployment. Those capabilities are not
+implemented yet.
+
+## Security
+
+The Discovery engine implements:
+
+- HTTP and HTTPS schemes only.
+- SSRF protection and public-IP validation.
+- Localhost, loopback, private, link-local, reserved, and metadata endpoint
+  rejection.
+- Validation of every redirect target.
+- TLS certificate verification.
+- Response-size and content-type limits.
+- Same-domain crawl restrictions and a maximum page count.
+- Safe HTML parsing without script execution.
+- No form submission or login attempts.
+- No storage of page HTML, tokens, cookies, authorisation headers, or stack
+  traces.
+- Safe user-facing errors and sanitised technical logging.
+
+DNS rebinding cannot be fully eliminated between DNS resolution and connection
+without infrastructure-level outbound controls. Production deployments should
+add egress restrictions or a resolver-pinned transport.
+
+## Screenshots
+
+### Dashboard
+
+Pipeline KPIs, company status distribution, recent companies, and Discovery
+Intelligence.
+
+Expected screenshot: `docs/screenshots/dashboard.png`
+
+### Companies
+
+The searchable company directory and lead pipeline workspace.
+
+Expected screenshot: `docs/screenshots/companies.png`
+
+### Discovery
+
+Discovery metrics, filters, scan history, scores, and report actions.
+
+Expected screenshot: `docs/screenshots/discovery.png`
+
+### Discovery Report
+
+Explainable score cards, website health, technology evidence, findings, and
+RapidNest Opportunities.
+
+Expected screenshot: `docs/screenshots/discovery-report.png`
+
+Screenshot placeholders are documented in `docs/screenshots/README.md`. Save
+future clean product captures at the paths above; captures must contain only the
+LeadPilot application and exclude browser chrome, notifications, and unrelated
+desktop content.
+
+## Project Structure
+
+```text
+LeadPilot-AI-RapidNest/
+├── src/leadpilot/
+│   ├── application/              # Services and typed application contracts
+│   ├── infrastructure/
+│   │   ├── database/             # SQLAlchemy models and repositories
+│   │   └── discovery_*.py        # Fetching, security, analysis, and scoring
+│   └── presentation/streamlit/   # Application shell, pages, theme, and assets
+├── migrations/                   # Alembic migration history
+├── tests/                        # Unit, persistence, migration, and UI tests
+└── docs/screenshots/             # Clean product screenshots
 ```
 
-Replace `<repository-url>` with the Git URL supplied by RapidNest.
+## Local Setup
 
-## Run the application
+Python 3.12 or newer and Git are required.
 
-From the repository root, with the virtual environment activated:
+### macOS and Linux
 
 ```bash
+git clone <repository-url>
+cd LeadPilot-AI-RapidNest
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -e ".[dev]"
+cp .env.example .env
+python -m alembic upgrade head
 python -m streamlit run src/leadpilot/presentation/streamlit/app.py
 ```
 
-Streamlit prints the local URL (normally `http://localhost:8501`) in the terminal.
+Open [http://localhost:8501](http://localhost:8501).
 
-## Run tests
+### Windows
+
+```powershell
+git clone <repository-url>
+cd LeadPilot-AI-RapidNest
+python -m venv .venv
+.venv\Scripts\activate
+pip install -e ".[dev]"
+copy .env.example .env
+python -m alembic upgrade head
+python -m streamlit run src/leadpilot/presentation/streamlit/app.py
+```
+
+## Configuration
+
+Copy `.env.example` to `.env` and adjust safe runtime values as needed. The
+configuration contains no secrets.
+
+| Variable | Default | Description |
+| --- | --- | --- |
+| `LEADPILOT_APP_NAME` | `LeadPilot AI` | Application display name. |
+| `LEADPILOT_ENV` | `development` | Application environment label. |
+| `LEADPILOT_LOG_LEVEL` | `INFO` | Logging threshold. |
+| `LEADPILOT_DATABASE_URL` | `sqlite:///./data/leadpilot.db` | SQLAlchemy database URL. |
+| `LEADPILOT_DISCOVERY_CONNECT_TIMEOUT` | `5` | HTTP connection timeout in seconds. |
+| `LEADPILOT_DISCOVERY_READ_TIMEOUT` | `10` | HTTP read timeout in seconds. |
+| `LEADPILOT_DISCOVERY_MAX_PAGES` | `9` | Maximum pages per scan, including the homepage. |
+| `LEADPILOT_DISCOVERY_MAX_RESPONSE_BYTES` | `2000000` | Maximum bytes accepted per response. |
+| `LEADPILOT_DISCOVERY_USER_AGENT` | `LeadPilot/0.1 Website Discovery` | Public scanner user agent. |
+| `LEADPILOT_DISCOVERY_RETRY_COUNT` | `1` | Safe transient retry count. |
+| `LEADPILOT_DISCOVERY_SLOW_RESPONSE_MS` | `3000` | Slow-response scoring threshold in milliseconds. |
+
+## Testing and Quality
 
 ```bash
 .venv/bin/python -m pytest
 .venv/bin/ruff check .
 .venv/bin/ruff format --check .
+.venv/bin/python -m compileall -q src tests
+.venv/bin/python -m alembic upgrade head
 ```
 
-## Architecture boundaries
+The current Milestone 4.1 build is validated by 85 passing tests.
 
-Presentation modules call application services only. SQLAlchemy models,
-sessions, and queries remain inside `infrastructure/database`; the application
-layer has no Streamlit dependency. Discovery orchestration, HTTP fetching, URL
-security, HTML analysis, technology detection, scoring, persistence, and UI
-rendering are separate modules. Database changes are managed only with Alembic.
+## Roadmap
 
-## Configuration
+### Completed
 
-Configuration is loaded from environment variables and an optional `.env` file. See `.env.example` for all current settings.
+- Milestone 1 — Application Foundation
+- Milestone 2 — Company Management
+- Milestone 3 — Professional SaaS UI
+- Milestone 4 — Website Discovery Engine
+- Milestone 4.1 — Dashboard and Discovery UX Polish
 
-| Variable | Default | Description |
-| --- | --- | --- |
-| `LEADPILOT_ENV` | `development` | Runtime environment name |
-| `LEADPILOT_LOG_LEVEL` | `INFO` | Structured logging threshold |
-| `LEADPILOT_DATABASE_URL` | `sqlite:///./data/leadpilot.db` | SQLAlchemy database URL |
-| `LEADPILOT_APP_NAME` | `LeadPilot AI` | Application display name |
-| `LEADPILOT_DISCOVERY_CONNECT_TIMEOUT` | `5` | Connect timeout in seconds |
-| `LEADPILOT_DISCOVERY_READ_TIMEOUT` | `10` | Read timeout in seconds |
-| `LEADPILOT_DISCOVERY_MAX_PAGES` | `9` | Maximum pages including homepage |
-| `LEADPILOT_DISCOVERY_MAX_RESPONSE_BYTES` | `2000000` | Per-response size limit |
-| `LEADPILOT_DISCOVERY_USER_AGENT` | `LeadPilot/0.1 Website Discovery` | Scanner identity |
-| `LEADPILOT_DISCOVERY_RETRY_COUNT` | `1` | Safe transient retry count |
-| `LEADPILOT_DISCOVERY_SLOW_RESPONSE_MS` | `3000` | Slow response scoring threshold |
+### Planned
 
-## Database migrations
+- Milestone 5 — AI Discovery Intelligence
+- Milestone 6 — Proposal Generator
+- Milestone 7 — Lead Discovery Agent
+- Milestone 8 — CRM and Sales Pipeline
+- Milestone 9 — Multi-user SaaS and PostgreSQL deployment
 
-Apply all migrations:
+## Known Limitations
 
-```bash
-python -m alembic upgrade head
-```
+- Discovery scans run synchronously.
+- JavaScript is not executed.
+- Technology detection depends on visible website evidence.
+- Dynamic client-rendered content may not be detected.
+- Some wide Streamlit tables may require horizontal scrolling.
+- DNS rebinding cannot be completely prevented without infrastructure-level
+  outbound controls.
 
-Create a future migration after adding SQLAlchemy models:
+## Vision
 
-```bash
-python -m alembic revision --autogenerate -m "describe the schema change"
-```
+LeadPilot AI is designed to become an AI-powered sales intelligence platform
+that helps consulting teams discover prospects, assess digital maturity,
+identify automation opportunities, generate executive discovery insights, and
+support the sales journey from research to proposal.
 
-The discovery migration adds company-owned scan records. The foreign key uses
-`ON DELETE CASCADE`, with SQLite foreign keys explicitly enabled, so deleting a
-company deliberately deletes its scan history.
+## Built by RapidNest
 
-## Discovery security and limitations
+Built by **RapidNest Software Solutions**
 
-Discovery accepts only HTTP(S), resolves the hostname before each request, and
-rejects loopback, private, link-local, reserved, multicast, and other non-global
-addresses. Every redirect target is independently validated. TLS verification
-remains enabled, response bodies are size-limited, HTML content is required for
-pages, crawling stays on the same hostname, scripts are never executed, and raw
-HTML, cookies, authorization headers, tokens, and stack traces are not stored.
-
-Pre-request DNS checks substantially reduce SSRF risk but cannot eliminate DNS
-rebinding between validation and connection because the HTTP transport performs
-its own DNS lookup. Production deployments should also enforce outbound network
-controls or use a resolver-pinned transport. The scanner does not execute
-JavaScript, so client-rendered signals may be absent. Technology detection is
-indicator-based and absence of a visible tool does not prove it is absent
-internally.
-
-## Company data
-
-Companies require a unique name and one of these pipeline statuses: `New`, `Researching`, `Qualified`, `Contacted`, `Proposal`, `Won`, or `Lost`. Supported company sizes are `Solo`, `2-10`, `11-50`, `51-200`, `201-500`, `501-1000`, and `1000+`.
-
-Websites may be entered with or without a scheme; bare domains such as `example.com` are normalized to `https://example.com`. Industry, country, city, company size, source, and notes are optional. Company names are treated as case-insensitively unique by the application.
-
-Discovery runs synchronously in Milestone 4; there are no workers, queues,
-schedules, search-engine scraping, proposal generation, or external AI providers.
+- Website: [https://www.therapidnest.com](https://www.therapidnest.com)
+- Email: [contact@therapidnest.com](mailto:contact@therapidnest.com)

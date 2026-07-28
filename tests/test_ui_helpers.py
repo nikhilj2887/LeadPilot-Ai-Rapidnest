@@ -306,3 +306,17 @@ def test_theme_is_responsive_without_css_scaling() -> None:
     assert "transform:scale" not in theme.replace(" ", "")
     assert "st.json(" not in discovery
     assert '"◈"' not in discovery
+
+
+def test_application_uses_supplied_logo_assets() -> None:
+    root = Path(__file__).parents[1] / "src/leadpilot/presentation/streamlit"
+    app_source = (root / "app.py").read_text()
+    logo = root / "assets/leadpilot-logo.png"
+    icon = root / "assets/leadpilot-icon.png"
+    assert logo.is_file() and logo.stat().st_size > 10_000
+    assert icon.is_file() and icon.stat().st_size > 1_000
+    assert "st.logo(" in app_source
+    assert "page_icon=str(ICON_PATH)" in app_source
+    assert "st.sidebar.image(str(LOGO_PATH)" in app_source
+    assert "Lead Intelligence Workspace" in app_source
+    assert "Built by RapidNest" in app_source

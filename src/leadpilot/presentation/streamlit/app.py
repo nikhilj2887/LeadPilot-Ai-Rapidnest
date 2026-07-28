@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import logging
 from collections.abc import Callable
+from pathlib import Path
 
 import streamlit as st
 
@@ -11,6 +12,9 @@ from leadpilot.presentation.streamlit.navigation import PAGES, navigation_label
 from leadpilot.presentation.streamlit.theme import apply_theme
 
 logger = logging.getLogger(__name__)
+ASSET_DIRECTORY = Path(__file__).with_name("assets")
+LOGO_PATH = ASSET_DIRECTORY / "leadpilot-logo.png"
+ICON_PATH = ASSET_DIRECTORY / "leadpilot-icon.png"
 
 
 @st.cache_resource
@@ -39,7 +43,7 @@ def render_page_safely(
 def main() -> None:
     st.set_page_config(
         page_title="LeadPilot AI",
-        page_icon="L",
+        page_icon=str(ICON_PATH),
         layout="wide",
         initial_sidebar_state="expanded",
     )
@@ -51,10 +55,14 @@ def main() -> None:
         st.error("LeadPilot could not start. Check the application logs for details.")
         return
 
+    st.logo(
+        str(LOGO_PATH),
+        size="large",
+        icon_image=str(ICON_PATH),
+    )
+    st.sidebar.image(str(LOGO_PATH), width="stretch")
     st.sidebar.markdown(
-        '<div class="lp-brand"><div class="lp-brand-name">'
-        '<span class="lp-brand-mark">L</span>LeadPilot AI</div>'
-        '<div class="lp-brand-subtitle">Lead Intelligence Workspace</div></div>',
+        '<div class="lp-product-subtitle">Lead Intelligence Workspace</div>',
         unsafe_allow_html=True,
     )
     selected_page = st.sidebar.radio(
@@ -71,12 +79,17 @@ def main() -> None:
         st.sidebar.markdown(
             '<div class="lp-health"><strong>System</strong><br>'
             f"{health_badge('Database', health.database_connected)}"
-            f"<br><br>{health.environment.title()} environment</div>",
+            f"<br><br>{health.environment.title()} environment"
+            '<div class="lp-attribution">Built by RapidNest</div></div>',
             unsafe_allow_html=True,
         )
     except Exception:
         logger.exception("Sidebar health check failed")
-        st.sidebar.caption("System status temporarily unavailable")
+        st.sidebar.markdown(
+            '<div class="lp-health">System status temporarily unavailable'
+            '<div class="lp-attribution">Built by RapidNest</div></div>',
+            unsafe_allow_html=True,
+        )
 
 
 if __name__ == "__main__":

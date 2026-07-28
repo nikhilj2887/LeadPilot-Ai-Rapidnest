@@ -18,13 +18,17 @@ APP_CSS = """
 }
 [data-testid="stSidebar"] { border-right: 1px solid var(--lp-border); }
 [data-testid="stSidebar"] .block-container { padding:1.7rem 1rem; }
-.lp-brand { padding: .3rem .35rem 1.5rem; }
-.lp-brand-name { font-size: 1.15rem; font-weight: 750; letter-spacing: -.025em; }
-.lp-brand-mark {
-  display:inline-grid; place-items:center; width:2rem; height:2rem; margin-right:.6rem;
-  border-radius:.65rem; color:white; background:linear-gradient(135deg,#7968ff,#4c3fe6);
+[data-testid="stSidebar"] [data-testid="stImage"] {
+  max-width:240px; margin:.1rem auto 1rem; padding:.55rem;
+  border:1px solid rgba(255,255,255,.72); border-radius:14px; background:#fff;
 }
-.lp-brand-subtitle { color:var(--lp-muted); font-size:.82rem; line-height:1.45; margin:.4rem 0 0 2.65rem; }
+[data-testid="stSidebar"] [data-testid="stImage"] img {
+  width:100%; max-height:170px; object-fit:contain;
+}
+.lp-product-subtitle {
+  margin:-.45rem 0 1rem; color:var(--lp-muted); font-size:.82rem;
+  line-height:1.4; text-align:center;
+}
 .lp-eyebrow { color:var(--lp-accent); font-size:.8rem; font-weight:700; letter-spacing:.035em; }
 .lp-page-header { margin-bottom: 1.35rem; }
 .lp-page-header h1 { font-size:clamp(1.8rem,2.4vw,2.15rem); line-height:1.2; letter-spacing:-.035em; margin:.2rem 0 .4rem; }
@@ -77,6 +81,10 @@ APP_CSS = """
 .lp-preview p { color:var(--lp-muted); font-size:.82rem; }
 .lp-health { font-size:.75rem; color:var(--lp-muted); padding:.2rem .35rem; }
 .lp-health strong { color:var(--text-color); }
+.lp-attribution {
+  margin-top:1.15rem; padding-top:.8rem; border-top:1px solid var(--lp-border);
+  color:var(--lp-muted); font-size:.72rem; letter-spacing:.02em;
+}
 div[data-testid="stButton"] button { border-radius:9px; min-height:2.65rem; font-size:.92rem; font-weight:650; }
 [data-testid="stDataFrame"] { font-size:.9rem; }
 [data-testid="stSidebar"] [role="radiogroup"] label { min-height:2.65rem; border-radius:9px; }
