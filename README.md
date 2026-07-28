@@ -16,6 +16,24 @@ persisted company pipeline.
   and Lead Priority scores with ratings, factors, and concise explanations.
 - Generate evidence-linked findings and RapidNest opportunities using rules.
 
+## Milestone 4.1 UX polish
+
+- Uses a responsive application canvas up to 1560px with readable typography,
+  equal-height KPI cards, balanced dashboard panels, and tablet-safe spacing.
+- Moves Discovery Intelligence higher on the Dashboard and adds completed scans,
+  high-priority leads, average automation potential, average AI readiness, and
+  recently scanned companies.
+- Presents website health, business signals, technologies, findings, contact
+  details, social links, and scan metadata as business-readable tables and cards
+  instead of raw JSON-like output.
+- Gives RapidNest Opportunities prominent evidence, outcomes, and priorities,
+  clearly framed as assessment opportunities rather than confirmed requirements.
+- Isolates page and dashboard-section failures so optional reporting errors no
+  longer appear as false application startup failures.
+
+Scanning, SSRF protection, persistence, and all five scoring calculations remain
+unchanged and deterministic. No AI provider is used.
+
 Discovery uses no OpenAI, Anthropic, Gemini, or other AI provider. All scores
 are deterministic, website-observable indicators and must not be interpreted as
 knowledge of a company's internal systems. Proposals remains a placeholder.

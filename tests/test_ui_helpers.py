@@ -1,7 +1,9 @@
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
+from types import SimpleNamespace
 
 from leadpilot.application.companies import COMPANY_STATUSES, Company, CompanyMetrics
+from leadpilot.presentation.streamlit.app import render_page_safely
 from leadpilot.presentation.streamlit.company_query import (
     PAGE_SIZE,
     build_page,
@@ -14,7 +16,19 @@ from leadpilot.presentation.streamlit.components import (
     status_badge,
     validate_status_styles,
 )
-from leadpilot.presentation.streamlit.pages.dashboard import kpi_values
+from leadpilot.presentation.streamlit.discovery_report import (
+    executive_summary,
+    finding_rows,
+    opportunity_rows,
+    score_cards,
+    signal_rows,
+    social_link_rows,
+    website_health_rows,
+)
+from leadpilot.presentation.streamlit.pages.dashboard import (
+    discovery_metric_values,
+    kpi_values,
+)
 from leadpilot.presentation.streamlit.state import (
     open_company_mode,
     reset_company_filters,
@@ -166,3 +180,129 @@ def test_ui_sources_include_milestone_sections_and_controls() -> None:
     assert all(label in companies_source for label in detail_labels)
     assert "Website Scan" in (root / "discovery.py").read_text()
     assert "PDF Export" in (root / "proposals.py").read_text()
+
+
+def discovery_scan(**overrides: object) -> SimpleNamespace:
+    values: dict[str, object] = {
+        "website_url": "https://acme.example",
+        "final_url": "https://acme.example/",
+        "is_https": True,
+        "ssl_valid": True,
+        "http_status_code": 200,
+        "response_time_ms": 420,
+        "page_title": "Acme",
+        "meta_description": "Acme services",
+        "mobile_viewport_present": True,
+        "robots_txt_present": True,
+        "sitemap_present": False,
+        "website_health_score": 80,
+        "digital_maturity_score": 65,
+        "ai_readiness_score": 55,
+        "automation_potential_score": 75,
+        "lead_priority_score": 72,
+        "contact_page_present": True,
+        "about_page_present": True,
+        "careers_page_present": False,
+        "blog_present": True,
+        "booking_system_present": False,
+        "ecommerce_present": False,
+        "contact_form_present": True,
+        "newsletter_present": False,
+        "whatsapp_present": True,
+        "phone_present": True,
+        "email_present": True,
+        "chatbot_present": False,
+        "detected_social_links": [
+            "https://linkedin.com/company/acme/",
+            "https://linkedin.com/company/acme",
+            "https://x.com/acme",
+        ],
+        "score_details": {},
+    }
+    values.update(overrides)
+    return SimpleNamespace(**values)
+
+
+def test_business_readable_discovery_report_mappings() -> None:
+    scan = discovery_scan()
+    health = website_health_rows(scan)  # type: ignore[arg-type]
+    assert health[0] == {
+        "Check": "HTTPS",
+        "Result": "Pass — Yes",
+        "Details": "https://acme.example/",
+    }
+    assert all(set(row) == {"Check", "Result", "Details"} for row in health)
+    assert [item.label for item in score_cards(scan)] == [  # type: ignore[arg-type]
+        "Website Health",
+        "Digital Maturity",
+        "AI Readiness",
+        "Automation Potential",
+        "Lead Priority",
+    ]
+    assert signal_rows(scan)[0]["Status"] == "Detected"  # type: ignore[arg-type]
+    assert "observable" not in executive_summary("Acme", scan).casefold()  # type: ignore[arg-type]
+
+
+def test_finding_opportunity_and_social_mappings() -> None:
+    findings = finding_rows(
+        [
+            {
+                "severity": "Attention",
+                "title": "Metadata gap",
+                "evidence": "No description",
+                "explanation": "Public signal",
+            }
+        ]
+    )
+    assert findings[0]["Severity"] == "Improvement"
+    opportunities = opportunity_rows(
+        [
+            {
+                "service_category": "CRM",
+                "opportunity": "Centralize enquiries",
+                "evidence": "Contact form",
+                "suggested_outcome": "Faster follow-up",
+            }
+        ]
+    )
+    assert opportunities[0]["RapidNest Service"] == "CRM Integration"
+    assert opportunities[0]["Priority"] == "High"
+    links = social_link_rows(discovery_scan())  # type: ignore[arg-type]
+    assert len(links) == 2
+    assert links[0]["Platform"] == "LinkedIn"
+    assert links[0]["Status"] == "Profile link"
+
+
+def test_dashboard_discovery_metrics_and_page_error_isolation() -> None:
+    summary = SimpleNamespace(
+        completed=4,
+        high_priority=2,
+        average_automation_potential=71.5,
+        average_ai_readiness=58.0,
+    )
+    assert [value for _, value, _ in discovery_metric_values(summary)] == [
+        4,
+        2,
+        71.5,
+        58.0,
+    ]
+    errors: list[str] = []
+
+    def broken(_container: object) -> None:
+        raise RuntimeError("dashboard section failed")
+
+    assert not render_page_safely(broken, object(), on_error=errors.append)  # type: ignore[arg-type]
+    assert errors and "saved data" in errors[0]
+    assert "could not start" not in errors[0].casefold()
+
+
+def test_theme_is_responsive_without_css_scaling() -> None:
+    root = Path(__file__).parents[1] / "src/leadpilot/presentation/streamlit"
+    theme = (root / "theme.py").read_text().casefold()
+    discovery = (root / "pages/discovery.py").read_text()
+    assert "max-width:1560px" in theme
+    assert "@media (max-width: 900px)" in theme
+    assert "zoom:" not in theme
+    assert "transform:scale" not in theme.replace(" ", "")
+    assert "st.json(" not in discovery
+    assert '"◈"' not in discovery

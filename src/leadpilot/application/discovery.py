@@ -40,6 +40,7 @@ class DiscoverySummary:
     average_lead_priority: float
     high_priority: int
     average_automation_potential: float
+    average_ai_readiness: float = 0.0
     recent: list[DiscoveryScan] = field(default_factory=list)
 
 

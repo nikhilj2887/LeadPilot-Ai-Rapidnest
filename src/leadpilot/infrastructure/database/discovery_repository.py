@@ -164,35 +164,40 @@ class DiscoveryRepository:
     def summary(self) -> DiscoverySummary:
         recent = self.list_recent(5)
         with self._session_factory() as session:
-            total, completed, failed, avg_lead, high, avg_auto = session.execute(
-                select(
-                    func.count(DiscoveryScanModel.id),
-                    func.sum(
-                        func.cast(
-                            DiscoveryScanModel.status == "Completed",
-                            type_=DiscoveryScanModel.id.type,
-                        )
-                    ),
-                    func.sum(
-                        func.cast(
-                            DiscoveryScanModel.status == "Failed",
-                            type_=DiscoveryScanModel.id.type,
-                        )
-                    ),
-                    func.avg(DiscoveryScanModel.lead_priority_score).filter(
-                        DiscoveryScanModel.status == "Completed"
-                    ),
-                    func.sum(
-                        func.cast(
-                            DiscoveryScanModel.lead_priority_score >= 61,
-                            type_=DiscoveryScanModel.id.type,
-                        )
-                    ),
-                    func.avg(DiscoveryScanModel.automation_potential_score).filter(
-                        DiscoveryScanModel.status == "Completed"
-                    ),
-                )
-            ).one()
+            total, completed, failed, avg_lead, high, avg_auto, avg_ai = (
+                session.execute(
+                    select(
+                        func.count(DiscoveryScanModel.id),
+                        func.sum(
+                            func.cast(
+                                DiscoveryScanModel.status == "Completed",
+                                type_=DiscoveryScanModel.id.type,
+                            )
+                        ),
+                        func.sum(
+                            func.cast(
+                                DiscoveryScanModel.status == "Failed",
+                                type_=DiscoveryScanModel.id.type,
+                            )
+                        ),
+                        func.avg(DiscoveryScanModel.lead_priority_score).filter(
+                            DiscoveryScanModel.status == "Completed"
+                        ),
+                        func.sum(
+                            func.cast(
+                                DiscoveryScanModel.lead_priority_score >= 61,
+                                type_=DiscoveryScanModel.id.type,
+                            )
+                        ),
+                        func.avg(DiscoveryScanModel.automation_potential_score).filter(
+                            DiscoveryScanModel.status == "Completed"
+                        ),
+                        func.avg(DiscoveryScanModel.ai_readiness_score).filter(
+                            DiscoveryScanModel.status == "Completed"
+                        ),
+                    )
+                ).one()
+            )
         return DiscoverySummary(
             total=total or 0,
             completed=completed or 0,
@@ -200,6 +205,7 @@ class DiscoveryRepository:
             average_lead_priority=round(avg_lead or 0, 1),
             high_priority=high or 0,
             average_automation_potential=round(avg_auto or 0, 1),
+            average_ai_readiness=round(avg_ai or 0, 1),
             recent=recent,
         )
 

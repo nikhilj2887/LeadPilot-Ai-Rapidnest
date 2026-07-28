@@ -13,7 +13,17 @@ from leadpilot.presentation.streamlit.components import (
     empty_state,
     kpi_card,
     page_header,
+    score_card,
     section_header,
+)
+from leadpilot.presentation.streamlit.discovery_report import (
+    executive_summary,
+    finding_rows,
+    opportunity_rows,
+    score_cards,
+    signal_rows,
+    social_link_rows,
+    website_health_rows,
 )
 
 
@@ -75,7 +85,7 @@ def _run(container: Container) -> None:
         empty_state(
             "Add a company first",
             "Discovery scans must be linked to an existing company.",
-            "⌕",
+            "Discovery",
         )
         return
     preferred = st.session_state.get("discovery_company_id")
@@ -112,18 +122,9 @@ def _run(container: Container) -> None:
 
 
 def _score_cards(scan: DiscoveryScan) -> None:
-    fields = (
-        ("Website Health", "website_health_score"),
-        ("Digital Maturity", "digital_maturity_score"),
-        ("AI Readiness", "ai_readiness_score"),
-        ("Automation Potential", "automation_potential_score"),
-        ("Lead Priority", "lead_priority_score"),
-    )
-    for column, (label, field) in zip(st.columns(5), fields, strict=True):
+    for column, item in zip(st.columns(5), score_cards(scan), strict=True):
         with column:
-            value = int(getattr(scan, field, 0))
-            kpi_card(label, value, "◈")
-            st.caption(rating_label(value))
+            score_card(item.label, item.value, item.rating, item.explanation)
 
 
 def _report(container: Container, scan: DiscoveryScan) -> None:
@@ -142,9 +143,13 @@ def _report(container: Container, scan: DiscoveryScan) -> None:
     _score_cards(scan)
     details = scan.score_details or {}
     section_header("Executive Overview")
-    st.write(
-        f"This deterministic report found a {rating_label(scan.lead_priority_score).lower()} "
-        "lead-priority profile using public website signals. It does not represent internal systems."
+    st.markdown(
+        f'<div class="lp-panel"><p>{escape(executive_summary(company.name, scan))}</p></div>',
+        unsafe_allow_html=True,
+    )
+    st.caption(
+        "Assessment is limited to observable public website indicators and does not "
+        "confirm the company’s internal systems or requirements."
     )
     for key, title in (
         ("website_health_score", "Website Health"),
@@ -167,47 +172,41 @@ def _report(container: Container, scan: DiscoveryScan) -> None:
                 ", ".join(item.get("negative_factors", [])) or "None observed",
             )
     section_header("Website Health")
-    health = {
-        "HTTPS": scan.is_https,
-        "SSL valid": scan.ssl_valid,
-        "HTTP status": scan.http_status_code,
-        "Response time": f"{scan.response_time_ms or 0} ms",
-        "Title": scan.page_title or "Missing",
-        "Meta description": scan.meta_description or "Missing",
-        "Mobile viewport": scan.mobile_viewport_present,
-        "robots.txt": scan.robots_txt_present,
-        "Sitemap": scan.sitemap_present,
-    }
-    st.json(health)
+    st.dataframe(
+        website_health_rows(scan),
+        use_container_width=True,
+        hide_index=True,
+        column_config={
+            "Check": st.column_config.TextColumn(width="small"),
+            "Result": st.column_config.TextColumn(width="small"),
+            "Details": st.column_config.TextColumn(width="large"),
+        },
+    )
     section_header("Technology Stack")
     if scan.detected_technologies:
+        technologies = [
+            {
+                **item,
+                "evidence": "; ".join(item.get("evidence", [])),
+            }
+            for item in scan.detected_technologies
+        ]
         st.dataframe(
-            scan.detected_technologies, use_container_width=True, hide_index=True
+            technologies,
+            use_container_width=True,
+            hide_index=True,
+            column_config={
+                "name": st.column_config.TextColumn("Technology", width="medium"),
+                "category": st.column_config.TextColumn("Category", width="small"),
+                "confidence": st.column_config.TextColumn("Confidence", width="small"),
+                "evidence": st.column_config.TextColumn("Evidence", width="large"),
+            },
         )
     else:
         st.info("No supported technology indicators were detected.")
     section_header("Business Signals")
-    signal_names = (
-        "contact_page_present",
-        "about_page_present",
-        "careers_page_present",
-        "blog_present",
-        "booking_system_present",
-        "ecommerce_present",
-        "contact_form_present",
-        "newsletter_present",
-        "whatsapp_present",
-        "phone_present",
-        "email_present",
-    )
     st.dataframe(
-        [
-            {
-                "Signal": name.replace("_present", "").replace("_", " ").title(),
-                "Detected": bool(getattr(scan, name)),
-            }
-            for name in signal_names
-        ],
+        signal_rows(scan),
         use_container_width=True,
         hide_index=True,
     )
@@ -216,33 +215,78 @@ def _report(container: Container, scan: DiscoveryScan) -> None:
         f"Live chat: {'Detected' if scan.live_chat_present else 'Not detected'} · Chatbot: {'Detected' if scan.chatbot_present else 'Not detected'}"
     )
     section_header("Social Presence")
-    st.write(
-        "\n".join(f"- {url}" for url in scan.detected_social_links)
-        or "No supported social links detected."
-    )
-    section_header("Findings")
-    for finding in scan.findings:
-        st.markdown(f"**{escape(finding['severity'])} — {escape(finding['title'])}**")
-        st.caption(finding["explanation"])
-    section_header("RapidNest Opportunities")
-    for item in scan.recommendations:
-        st.markdown(
-            f"**{escape(item['service_category'])}** — {escape(item['opportunity'])}"
+    social_rows = social_link_rows(scan)
+    if social_rows:
+        st.dataframe(
+            social_rows,
+            use_container_width=True,
+            hide_index=True,
+            column_config={"URL": st.column_config.LinkColumn("Detected link")},
         )
-        st.caption(f"Evidence: {item['evidence']}")
-    section_header("Contact Information")
-    st.write("Emails:", ", ".join(scan.detected_emails) or "None detected")
-    st.write(
-        "Phone numbers:", ", ".join(scan.detected_phone_numbers) or "None detected"
+    else:
+        st.info("No usable social profile links were detected.")
+    section_header("Findings")
+    for finding in finding_rows(scan.findings):
+        st.markdown(
+            '<div class="lp-report-card">'
+            f'<span class="lp-badge lp-researching">{escape(finding["Severity"])}</span>'
+            f"<p><strong>{escape(finding['Title'])}</strong></p>"
+            f"<p><b>Evidence:</b> {escape(finding['Evidence'])}</p>"
+            f"<p>{escape(finding['Explanation'])}</p></div>",
+            unsafe_allow_html=True,
+        )
+    section_header(
+        "RapidNest Opportunities",
+        "Evidence-supported assessment opportunities, not confirmed internal requirements.",
     )
+    opportunities = opportunity_rows(scan.recommendations)
+    if opportunities:
+        st.dataframe(
+            opportunities,
+            use_container_width=True,
+            hide_index=True,
+            column_config={
+                "RapidNest Service": st.column_config.TextColumn(width="medium"),
+                "Opportunity": st.column_config.TextColumn(width="large"),
+                "Evidence": st.column_config.TextColumn(width="large"),
+                "Suggested Outcome": st.column_config.TextColumn(width="large"),
+                "Priority": st.column_config.TextColumn(width="small"),
+            },
+        )
+    else:
+        st.info("No evidence-supported RapidNest opportunities were generated.")
+    section_header("Contact Information")
+    contacts = [
+        *(
+            {"Type": "Email", "Contact": value}
+            for value in dict.fromkeys(scan.detected_emails)
+        ),
+        *(
+            {"Type": "Phone", "Contact": value}
+            for value in dict.fromkeys(scan.detected_phone_numbers)
+        ),
+    ]
+    if contacts:
+        st.dataframe(
+            contacts,
+            use_container_width=True,
+            hide_index=True,
+        )
+    else:
+        st.info("No public email addresses or phone numbers were detected.")
     section_header("Scan Metadata")
-    st.write(
-        {
-            "Started": scan.started_at,
-            "Completed": scan.completed_at,
-            "Final URL": scan.final_url,
-            "HTTP status": scan.http_status_code,
-        }
+    st.dataframe(
+        [
+            {"Field": "Started", "Value": str(scan.started_at or "Unavailable")},
+            {"Field": "Completed", "Value": str(scan.completed_at or "Unavailable")},
+            {"Field": "Final URL", "Value": scan.final_url or scan.website_url},
+            {
+                "Field": "HTTP Status",
+                "Value": str(scan.http_status_code or "Unavailable"),
+            },
+        ],
+        use_container_width=True,
+        hide_index=True,
     )
 
 
@@ -269,7 +313,7 @@ def _list(container: Container) -> None:
         strict=True,
     ):
         with column:
-            kpi_card(item[0], item[1], "⌕")
+            kpi_card(item[0], item[1], "")
     scans = container.discovery.recent_scans()
     section_header("Discovery Reports", "Filter scans by status, priority, or website.")
     filters = st.columns(3)
@@ -283,7 +327,7 @@ def _list(container: Container) -> None:
         empty_state(
             "No discovery scans yet",
             "Select an existing company and run a safe, synchronous public website scan.",
-            "⌕",
+            "Discovery",
         )
         return
     for scan in filtered:
@@ -299,8 +343,16 @@ def _list(container: Container) -> None:
             scan.automation_potential_score,
             scan.lead_priority_score,
         )
-        for col, value in zip(cols[:-1], values, strict=True):
-            col.write(value)
+        for index, (col, value) in enumerate(zip(cols[:-1], values, strict=True)):
+            if index == 2:
+                col.markdown(
+                    f'<span class="lp-badge lp-researching">{escape(str(value))}</span>',
+                    unsafe_allow_html=True,
+                )
+            elif index >= 3:
+                col.markdown(f"**{score_badge(int(value))}**")
+            else:
+                col.write(value)
         if cols[-1].button("View", key=f"scan-{scan.id}"):
             _open("report", scan.id)
 
