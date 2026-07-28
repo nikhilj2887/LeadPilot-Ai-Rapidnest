@@ -25,10 +25,24 @@ LeadPilot AI is designed to help consulting and software teams:
 - Prepare structured discovery insights for future AI-assisted workflows and
   proposals.
 
-Discovery scoring in Milestone 4 is deterministic. Scores and recommendations
+Discovery scoring remains deterministic. Scores and recommendations
 use only publicly observable website evidence; they do not confirm or infer a
-company's internal systems as facts. No OpenAI, Anthropic, Gemini, or other AI
-provider is used in Milestone 4.
+company's internal systems as facts. Milestone 5 adds an optional, separately
+stored AI interpretation layer; it never changes deterministic scores.
+
+### AI Discovery Intelligence
+
+Milestone 5 turns a completed scan's normalized structured evidence into a
+schema-validated, versioned business draft. A provider-neutral application
+contract isolates OpenAI SDK details in an infrastructure adapter and supports a
+deterministic fake provider for tests and explicit local demonstration.
+
+The AI receives no raw HTML and performs no independent browsing. Stable evidence
+identifiers ground important claims, unknown references are rejected, website
+content is treated as untrusted data, and the versioned system prompt explicitly
+rejects prompt injection and unsupported facts. Every result is marked
+**AI-generated draft — review before client use**, retains history, supports
+current/stale detection, and can be marked Unreviewed, Reviewed, or Needs Changes.
 
 ## Current Features
 
@@ -249,6 +263,36 @@ configuration contains no secrets.
 | `LEADPILOT_DISCOVERY_USER_AGENT` | `LeadPilot/0.1 Website Discovery` | Public scanner user agent. |
 | `LEADPILOT_DISCOVERY_RETRY_COUNT` | `1` | Safe transient retry count. |
 | `LEADPILOT_DISCOVERY_SLOW_RESPONSE_MS` | `3000` | Slow-response scoring threshold in milliseconds. |
+| `LEADPILOT_AI_ENABLED` | `false` | Enables AI only when a key is also configured. |
+| `LEADPILOT_AI_PROVIDER` | `openai` | Provider adapter (`fake` only in development/test). |
+| `LEADPILOT_AI_MODEL` | `gpt-5-mini` | Provider model identifier. |
+| `LEADPILOT_AI_API_KEY` | empty | Secret read only from the environment; never displayed or stored. |
+| `LEADPILOT_AI_TIMEOUT_SECONDS` | `60` | Provider timeout. |
+| `LEADPILOT_AI_MAX_RETRIES` | `1` | Safe SDK retry limit. |
+| `LEADPILOT_AI_TEMPERATURE` | `0.2` | Reserved provider sampling preference. |
+| `LEADPILOT_AI_MAX_OUTPUT_TOKENS` | `6000` | Output budget. |
+| `LEADPILOT_AI_INPUT_PRICE_PER_MILLION` | empty | Optional explicit input-token rate. |
+| `LEADPILOT_AI_OUTPUT_PRICE_PER_MILLION` | empty | Optional explicit output-token rate. |
+
+Never commit `.env`. For a local key, copy `.env.example`, add the key only to
+your ignored `.env`, and set `LEADPILOT_AI_ENABLED=true`. To demonstrate without
+network calls, use provider `fake` in a development environment and explicitly
+enable AI with a non-production placeholder key.
+
+Cost is estimated only when both rates are configured; otherwise it remains
+unavailable. Token usage is shown only as generation metadata.
+
+## Known Limitations
+
+- AI output may be inaccurate and always requires human review.
+- Interpretation is limited to structured, website-observable evidence; no
+  independent AI browsing or verification of internal systems occurs.
+- Scanning and AI generation are synchronous, and provider availability or rate
+  limits can affect generation.
+- Cost estimates require explicitly configured pricing rates.
+- AI content is never automatically sent or published.
+- Proposal, PDF, outreach automation, authentication, and multi-user workflows
+  are not included in Milestone 5.
 
 ## Testing and Quality
 
@@ -260,7 +304,7 @@ configuration contains no secrets.
 .venv/bin/python -m alembic upgrade head
 ```
 
-The current Milestone 4.1 build is validated by 85 passing tests.
+The Milestone 5 build is validated by the repository test suite.
 
 ## Roadmap
 
@@ -271,10 +315,10 @@ The current Milestone 4.1 build is validated by 85 passing tests.
 - Milestone 3 — Professional SaaS UI
 - Milestone 4 — Website Discovery Engine
 - Milestone 4.1 — Dashboard and Discovery UX Polish
+- Milestone 5 — AI Discovery Intelligence
 
 ### Planned
 
-- Milestone 5 — AI Discovery Intelligence
 - Milestone 6 — Proposal Generator
 - Milestone 7 — Lead Discovery Agent
 - Milestone 8 — CRM and Sales Pipeline

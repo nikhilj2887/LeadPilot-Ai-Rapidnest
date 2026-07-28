@@ -253,6 +253,47 @@ def _detail(container: Container, company: Company) -> None:
         navigate(st.session_state, "Discovery")
         st.rerun()
 
+    section_header(
+        "AI Intelligence", "Latest evidence-grounded AI draft for this company."
+    )
+    ai_latest = container.discovery_ai.latest_for_company(company.id)
+    if ai_latest and ai_latest.status == "Completed":
+        current = container.discovery_ai.is_current(ai_latest)
+        st.markdown(status_badge(ai_latest.review_status), unsafe_allow_html=True)
+        st.caption(
+            f"Generated {ai_latest.completed_at or ai_latest.created_at:%d %b %Y, %H:%M} · "
+            f"{'Current' if current else 'Stale'}"
+        )
+        st.write((ai_latest.executive_summary or "")[:500])
+        services = [
+            item.get("service", "")
+            for item in ai_latest.recommended_services[:3]
+            if item.get("service")
+        ]
+        if services:
+            st.write("Top services:", " · ".join(services))
+        if st.button("View Full AI Intelligence", key=f"company-ai-{company.id}"):
+            st.session_state.discovery_mode = "report"
+            st.session_state.discovery_scan_id = ai_latest.discovery_scan_id
+            navigate(st.session_state, "Discovery")
+            st.rerun()
+    elif latest and latest.status == "Completed":
+        available, message = container.discovery_ai.availability
+        st.caption(
+            "No AI analysis exists yet."
+            if available
+            else f"No AI analysis exists yet. {message}"
+        )
+        if available and st.button(
+            "Generate AI Intelligence", key=f"company-ai-generate-{company.id}"
+        ):
+            st.session_state.discovery_mode = "report"
+            st.session_state.discovery_scan_id = latest.id
+            navigate(st.session_state, "Discovery")
+            st.rerun()
+    else:
+        st.caption("Complete a Discovery Scan before generating AI Intelligence.")
+
     section_header("Record Metadata")
     metadata = st.columns(2)
     with metadata[0]:

@@ -109,6 +109,34 @@ def _quick_actions() -> None:
         st.rerun()
 
 
+def _ai_intelligence(container: Container) -> None:
+    summary = container.discovery_ai.dashboard_summary()
+    if not any((summary["completed"], summary["failed"], summary["awaiting_review"])):
+        return
+    section_header(
+        "AI Intelligence",
+        "Generation activity and drafts awaiting human review.",
+    )
+    for column, (label, value) in zip(
+        st.columns(3),
+        (
+            ("Completed AI Analyses", summary["completed"]),
+            ("Failed AI Analyses", summary["failed"]),
+            ("Awaiting Review", summary["awaiting_review"]),
+        ),
+        strict=True,
+    ):
+        with column:
+            kpi_card(label, value, "")
+    if summary["top_services"]:
+        st.caption(
+            "Top recommended services: "
+            + " · ".join(
+                f"{service} ({count})" for service, count in summary["top_services"]
+            )
+        )
+
+
 def render(container: Container) -> None:
     header, refresh = st.columns([6, 1])
     with header:
@@ -183,4 +211,5 @@ def render(container: Container) -> None:
             st.divider()
 
     _discovery_intelligence(container)
+    _ai_intelligence(container)
     _quick_actions()
