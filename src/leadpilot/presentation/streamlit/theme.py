@@ -17,9 +17,12 @@ APP_CSS = """
   width:100%; max-width:1560px; padding:2rem clamp(1.25rem, 3vw, 3rem) 4rem;
 }
 [data-testid="stSidebar"] { border-right: 1px solid var(--lp-border); }
-[data-testid="stSidebar"] .block-container { padding:1.7rem 1rem; }
+[data-testid="stSidebar"] [data-testid="stSidebarHeader"] {
+  position:absolute; top:.5rem; right:.5rem; z-index:2;
+}
+[data-testid="stSidebar"] .block-container { padding:.25rem 1rem 1.7rem; }
 [data-testid="stSidebar"] [data-testid="stImage"] {
-  max-width:240px; margin:.1rem auto 1rem; padding:.55rem;
+  max-width:220px; margin:-1rem auto 1rem; padding:.55rem;
   border:1px solid rgba(255,255,255,.72); border-radius:14px; background:#fff;
 }
 [data-testid="stSidebar"] [data-testid="stImage"] img {

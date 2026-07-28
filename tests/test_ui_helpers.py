@@ -389,8 +389,13 @@ def test_application_uses_supplied_logo_assets() -> None:
     icon = root / "assets/leadpilot-icon.png"
     assert logo.is_file() and logo.stat().st_size > 10_000
     assert icon.is_file() and icon.stat().st_size > 1_000
-    assert "st.logo(" in app_source
+    assert "st.logo(" not in app_source
     assert "page_icon=str(ICON_PATH)" in app_source
     assert "st.sidebar.image(str(LOGO_PATH)" in app_source
+    theme = (root / "theme.py").read_text()
+    assert "padding:.25rem 1rem 1.7rem" in theme
+    assert '[data-testid="stSidebarHeader"]' in theme
+    assert "position:absolute" in theme
+    assert "margin:-1rem auto 1rem" in theme
     assert "Lead Intelligence Workspace" in app_source
     assert "Built by RapidNest" in app_source

@@ -69,11 +69,6 @@ def main() -> None:
         st.error("LeadPilot could not start. Check the application logs for details.")
         return
 
-    st.logo(
-        str(LOGO_PATH),
-        size="large",
-        icon_image=str(ICON_PATH),
-    )
     st.sidebar.image(str(LOGO_PATH), width="stretch")
     st.sidebar.markdown(
         '<div class="lp-product-subtitle">Lead Intelligence Workspace</div>',
