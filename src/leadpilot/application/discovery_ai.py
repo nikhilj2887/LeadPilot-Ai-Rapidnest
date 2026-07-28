@@ -41,6 +41,7 @@ class DiscoveryAIAnalysis:
     updated_at: datetime
     reviewed_at: datetime | None = None
     reviewer_notes: str | None = None
+    organization_id: int = 1
 
     def __getattr__(self, name: str) -> Any:
         if name in self.data:
@@ -74,6 +75,8 @@ class DiscoveryAIService:
         discovery: Any,
         provider: AIProvider,
         settings: Any,
+        organizations: Any | None = None,
+        organization_id: int = 1,
     ) -> None:
         self._repository, self._companies, self._discovery = (
             repository,
@@ -81,6 +84,8 @@ class DiscoveryAIService:
             discovery,
         )
         self._provider, self._settings = provider, settings
+        self._organizations = organizations
+        self._organization_id = organization_id
 
     @property
     def availability(self) -> tuple[bool, str]:
@@ -126,7 +131,30 @@ class DiscoveryAIService:
         self._repository.update_status(record.id, "Running")
         started = monotonic()
         try:
-            system, evidence = build_prompt(snapshot)
+            organization_profile = None
+            if self._organizations is not None:
+                organization = self._organizations.get(self._organization_id)
+                branding = self._organizations.get_branding(self._organization_id)
+                services = self._organizations.list_services(
+                    self._organization_id, active_only=True
+                )
+                organization_profile = {
+                    "display_name": organization.display_name,
+                    "brand_name": branding.brand_name
+                    if branding
+                    else organization.display_name,
+                    "website": organization.website,
+                    "contact_email": organization.contact_email,
+                    "contact_phone": organization.contact_phone,
+                    "services": [
+                        {
+                            "name": item.name,
+                            "description": item.short_description,
+                        }
+                        for item in services
+                    ],
+                }
+            system, evidence = build_prompt(snapshot, organization_profile)
             response = self._provider.generate(
                 AIRequest(
                     system,

@@ -25,6 +25,7 @@ class DiscoveryScan:
     data: dict[str, Any]
     created_at: datetime
     updated_at: datetime
+    organization_id: int = 1
 
     def __getattr__(self, name: str) -> Any:
         if name in self.data:

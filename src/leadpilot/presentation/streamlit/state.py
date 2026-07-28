@@ -42,3 +42,33 @@ def return_to_company_list(state: MutableMapping[str, Any]) -> None:
 
 def navigate(state: MutableMapping[str, Any], page: str) -> None:
     state["navigation"] = page
+
+
+def switch_organization(
+    state: MutableMapping[str, Any], organization_id: int, valid_ids: set[int]
+) -> bool:
+    """Apply only a server-validated organization selection."""
+    if organization_id not in valid_ids:
+        state.pop("organization_id", None)
+        return False
+    if state.get("organization_id") == organization_id:
+        return True
+    state["organization_id"] = organization_id
+    state["navigation"] = "Dashboard"
+    organization_owned_prefixes = (
+        "discovery_",
+        "ai_",
+        "selected_ai",
+        "selected_scan",
+    )
+    organization_owned_keys = {
+        "selected_company",
+        "company_mode",
+        "company_flash",
+    }
+    for key in tuple(state):
+        if key in organization_owned_keys or key.startswith(
+            organization_owned_prefixes
+        ):
+            state.pop(key, None)
+    return True

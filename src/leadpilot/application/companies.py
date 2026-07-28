@@ -39,6 +39,7 @@ class Company:
     notes: str | None
     created_at: datetime
     updated_at: datetime
+    organization_id: int = 1
 
 
 @dataclass(frozen=True, slots=True)

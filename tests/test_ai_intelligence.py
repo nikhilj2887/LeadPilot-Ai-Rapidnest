@@ -107,7 +107,7 @@ def test_snapshot_is_stable_and_prompt_excludes_secrets_and_html() -> None:
     snapshot = build_snapshot(company, scan)
     assert snapshot_hash(snapshot) == snapshot_hash(snapshot)
     system, evidence = build_prompt(snapshot)
-    assert PROMPT_VERSION in {"leadpilot-ai-v1"}
+    assert PROMPT_VERSION == "leadpilot-ai-v2"
     assert "untrusted" in system
     assert "<html" not in evidence.lower()
     assert "api_key" not in evidence.lower()

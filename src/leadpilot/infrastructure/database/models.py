@@ -2,10 +2,94 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from sqlalchemy import Boolean, DateTime, Float, ForeignKey, Integer, String, Text, func
+from sqlalchemy import (
+    Boolean,
+    DateTime,
+    Float,
+    ForeignKey,
+    Integer,
+    String,
+    Text,
+    UniqueConstraint,
+    func,
+)
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from leadpilot.infrastructure.database.base import Base
+
+
+class OrganizationModel(Base):
+    __tablename__ = "organizations"
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    slug: Mapped[str] = mapped_column(String(80), unique=True, index=True)
+    legal_name: Mapped[str | None] = mapped_column(String(200))
+    display_name: Mapped[str] = mapped_column(String(200))
+    status: Mapped[str] = mapped_column(String(20), default="active", index=True)
+    default_currency: Mapped[str] = mapped_column(String(3), default="INR")
+    timezone: Mapped[str] = mapped_column(String(80), default="Asia/Kolkata")
+    website: Mapped[str | None] = mapped_column(String(500))
+    contact_email: Mapped[str | None] = mapped_column(String(320))
+    contact_phone: Mapped[str | None] = mapped_column(String(50))
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+    branding: Mapped[OrganizationBrandingModel | None] = relationship(
+        back_populates="organization", cascade="all, delete-orphan"
+    )
+    services: Mapped[list[OrganizationServiceModel]] = relationship(
+        back_populates="organization", cascade="all, delete-orphan"
+    )
+
+
+class OrganizationBrandingModel(Base):
+    __tablename__ = "organization_branding"
+
+    organization_id: Mapped[int] = mapped_column(
+        ForeignKey("organizations.id", ondelete="CASCADE"), primary_key=True
+    )
+    brand_name: Mapped[str] = mapped_column(String(200))
+    logo_reference: Mapped[str | None] = mapped_column(String(500))
+    primary_color: Mapped[str] = mapped_column(String(7), default="#2563EB")
+    secondary_color: Mapped[str] = mapped_column(String(7), default="#0F172A")
+    accent_color: Mapped[str] = mapped_column(String(7), default="#14B8A6")
+    proposal_footer: Mapped[str | None] = mapped_column(Text)
+    email_signature: Mapped[str | None] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+    organization: Mapped[OrganizationModel] = relationship(back_populates="branding")
+
+
+class OrganizationServiceModel(Base):
+    __tablename__ = "organization_services"
+    __table_args__ = (
+        UniqueConstraint("organization_id", "name", name="uq_org_services_name"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    organization_id: Mapped[int] = mapped_column(
+        ForeignKey("organizations.id", ondelete="CASCADE"), index=True
+    )
+    name: Mapped[str] = mapped_column(String(200))
+    short_description: Mapped[str | None] = mapped_column(String(500))
+    full_description: Mapped[str | None] = mapped_column(Text)
+    category: Mapped[str | None] = mapped_column(String(120))
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True, index=True)
+    display_order: Mapped[int] = mapped_column(Integer, default=0)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+    organization: Mapped[OrganizationModel] = relationship(back_populates="services")
 
 
 class CompanyModel(Base):
@@ -14,7 +98,15 @@ class CompanyModel(Base):
     __tablename__ = "companies"
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
-    name: Mapped[str] = mapped_column(String(200), unique=True, index=True)
+    __table_args__ = (
+        UniqueConstraint("organization_id", "name", name="uq_companies_org_name"),
+        UniqueConstraint("organization_id", "website", name="uq_companies_org_website"),
+    )
+
+    organization_id: Mapped[int] = mapped_column(
+        ForeignKey("organizations.id", ondelete="RESTRICT"), index=True
+    )
+    name: Mapped[str] = mapped_column(String(200), index=True)
     website: Mapped[str | None] = mapped_column(String(500), nullable=True, index=True)
     industry: Mapped[str | None] = mapped_column(String(120), nullable=True)
     country: Mapped[str | None] = mapped_column(String(120), nullable=True, index=True)
@@ -43,6 +135,9 @@ class DiscoveryScanModel(Base):
     __tablename__ = "discovery_scans"
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    organization_id: Mapped[int] = mapped_column(
+        ForeignKey("organizations.id", ondelete="RESTRICT"), index=True
+    )
     company_id: Mapped[int] = mapped_column(
         ForeignKey("companies.id", ondelete="CASCADE"), index=True
     )
@@ -109,6 +204,9 @@ class DiscoveryAIAnalysisModel(Base):
     __tablename__ = "discovery_ai_analyses"
 
     id: Mapped[int] = mapped_column(primary_key=True)
+    organization_id: Mapped[int] = mapped_column(
+        ForeignKey("organizations.id", ondelete="RESTRICT"), index=True
+    )
     discovery_scan_id: Mapped[int] = mapped_column(
         ForeignKey("discovery_scans.id", ondelete="CASCADE"), index=True
     )
