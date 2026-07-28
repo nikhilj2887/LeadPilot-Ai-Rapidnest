@@ -87,8 +87,42 @@ APP_CSS = """
 }
 div[data-testid="stButton"] button { border-radius:9px; min-height:2.65rem; font-size:.92rem; font-weight:650; }
 [data-testid="stDataFrame"] { font-size:.9rem; }
-[data-testid="stSidebar"] [role="radiogroup"] label { min-height:2.65rem; border-radius:9px; }
-[data-testid="stSidebar"] [role="radiogroup"] label:has(input:checked) { background:var(--lp-accent-soft); }
+[data-testid="stSidebar"] [role="radiogroup"] {
+  width:100%; gap:.35rem;
+}
+[data-testid="stSidebar"] [role="radiogroup"] label {
+  box-sizing:border-box; width:100%; min-width:0; min-height:2.75rem;
+  margin:0; padding:.35rem .8rem .35rem .9rem; gap:.72rem;
+  border:1px solid transparent; border-radius:10px;
+  color:rgba(235,235,245,.82); cursor:pointer;
+  transition:background-color .16s ease, border-color .16s ease, box-shadow .16s ease;
+}
+[data-testid="stSidebar"] [role="radiogroup"] label p {
+  margin:0; overflow:hidden; color:inherit; font-weight:550;
+  line-height:1.3; text-overflow:ellipsis; white-space:nowrap;
+}
+[data-testid="stSidebar"] [role="radiogroup"] label:not(:has(input:checked)):hover {
+  background:rgba(109,93,252,.09); border-color:rgba(109,93,252,.18);
+  color:rgba(250,250,255,.94);
+}
+[data-testid="stSidebar"] [role="radiogroup"] label:has(input:checked) {
+  background:#29265f; border-color:rgba(132,116,255,.48);
+  box-shadow:inset 4px 0 0 #7c6cff; color:#fff;
+}
+[data-testid="stSidebar"] [role="radiogroup"] label:has(input:checked) p {
+  font-weight:680;
+}
+[data-testid="stSidebar"] [role="radiogroup"] label:has(input:checked) > div > div > div:first-child {
+  background:#7c6cff !important; border-color:#a79cff !important;
+  box-shadow:0 0 0 2px rgba(124,108,255,.2) !important;
+}
+[data-testid="stSidebar"] [role="radiogroup"] label:not(:has(input:checked)) > div > div > div:first-child {
+  background:transparent !important;
+  border:1.5px solid rgba(235,235,245,.62) !important;
+}
+[data-testid="stSidebar"] [role="radiogroup"] label:has(input:focus-visible) {
+  outline:3px solid rgba(109,93,252,.72); outline-offset:2px;
+}
 div[data-testid="stForm"] { border:1px solid var(--lp-border); border-radius:14px; padding:1.15rem; }
 div[data-testid="stAlert"] { border-radius:12px; }
 @media (max-width: 900px) {

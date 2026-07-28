@@ -153,6 +153,19 @@ def test_navigation_is_single_and_no_reserved_pages_directory_exists() -> None:
     assert not (streamlit_root / "pages.py").exists()
 
 
+def test_sidebar_navigation_has_accessible_active_and_focus_states() -> None:
+    root = Path(__file__).parents[1]
+    theme = (root / "src/leadpilot/presentation/streamlit/theme.py").read_text()
+    assert '[role="radiogroup"] label:has(input:checked)' in theme
+    assert "box-shadow:inset 4px 0 0 #7c6cff" in theme
+    assert "background:#29265f" in theme
+    assert "width:100%" in theme
+    assert "white-space:nowrap" in theme
+    assert "input:focus-visible" in theme
+    assert "label:not(:has(input:checked)):hover" in theme
+    assert "border:1.5px solid rgba(235,235,245,.62)" in theme
+
+
 def test_ui_sources_include_milestone_sections_and_controls() -> None:
     streamlit_root = Path(__file__).parents[1] / "src/leadpilot/presentation/streamlit"
     root = streamlit_root / "pages"
