@@ -8,6 +8,7 @@ from leadpilot.application.discovery import DISCOVERY_STATUSES, DiscoveryScan
 from leadpilot.bootstrap import Container
 from leadpilot.infrastructure.discovery_scoring import rating_label
 from leadpilot.infrastructure.discovery_security import normalize_url
+from leadpilot.presentation.streamlit.ai_report import render_ai_intelligence
 from leadpilot.presentation.streamlit.components import (
     alert_message,
     empty_state,
@@ -288,6 +289,7 @@ def _report(container: Container, scan: DiscoveryScan) -> None:
         use_container_width=True,
         hide_index=True,
     )
+    render_ai_intelligence(container, scan.id)
 
 
 def _list(container: Container) -> None:

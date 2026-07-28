@@ -5,10 +5,16 @@ from dataclasses import dataclass
 from sqlalchemy import Engine
 from sqlalchemy.orm import Session, sessionmaker
 
+from leadpilot.application.ai_provider import AIProviderError, DisabledAIProvider
 from leadpilot.application.companies import CompanyService
 from leadpilot.application.discovery import DiscoveryService
+from leadpilot.application.discovery_ai import DiscoveryAIService
 from leadpilot.application.health import HealthCheckService
 from leadpilot.config import Settings, get_settings
+from leadpilot.infrastructure.ai_providers import create_ai_provider
+from leadpilot.infrastructure.database.ai_analysis_repository import (
+    AIAnalysisRepository,
+)
 from leadpilot.infrastructure.database.company_repository import CompanyRepository
 from leadpilot.infrastructure.database.discovery_repository import DiscoveryRepository
 from leadpilot.infrastructure.database.engine import create_database_engine
@@ -26,6 +32,7 @@ class Container:
     health_check: HealthCheckService
     companies: CompanyService
     discovery: DiscoveryService
+    discovery_ai: DiscoveryAIService
 
     def dispose(self) -> None:
         self.engine.dispose()
@@ -44,19 +51,31 @@ def bootstrap(settings: Settings | None = None) -> Container:
         user_agent=resolved_settings.discovery_user_agent,
         retry_count=resolved_settings.discovery_retry_count,
     )
+    discovery_service = DiscoveryService(
+        DiscoveryRepository(session_factory),
+        company_repository,
+        WebsiteScanner(
+            client,
+            max_pages=resolved_settings.discovery_max_pages,
+            slow_ms=resolved_settings.discovery_slow_response_ms,
+        ),
+    )
+    try:
+        ai_provider = create_ai_provider(resolved_settings)
+    except AIProviderError:
+        ai_provider = DisabledAIProvider()
     return Container(
         settings=resolved_settings,
         engine=engine,
         session_factory=session_factory,
         health_check=HealthCheckService(engine, resolved_settings.environment),
         companies=CompanyService(company_repository),
-        discovery=DiscoveryService(
-            DiscoveryRepository(session_factory),
-            company_repository,
-            WebsiteScanner(
-                client,
-                max_pages=resolved_settings.discovery_max_pages,
-                slow_ms=resolved_settings.discovery_slow_response_ms,
-            ),
+        discovery=discovery_service,
+        discovery_ai=DiscoveryAIService(
+            AIAnalysisRepository(session_factory),
+            CompanyService(company_repository),
+            discovery_service,
+            ai_provider,
+            resolved_settings,
         ),
     )

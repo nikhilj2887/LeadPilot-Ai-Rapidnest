@@ -23,6 +23,16 @@ class Settings:
     discovery_user_agent: str = "LeadPilot/0.1 Website Discovery"
     discovery_retry_count: int = 1
     discovery_slow_response_ms: int = 3000
+    ai_enabled: bool = False
+    ai_provider: str = "openai"
+    ai_model: str = "gpt-5-mini"
+    ai_api_key: str | None = None
+    ai_timeout_seconds: float = 60.0
+    ai_max_retries: int = 1
+    ai_temperature: float = 0.2
+    ai_max_output_tokens: int = 6000
+    ai_input_price_per_million: float | None = None
+    ai_output_price_per_million: float | None = None
 
     @classmethod
     def from_env(cls, env_file: str | None = ".env") -> Settings:
@@ -40,6 +50,13 @@ class Settings:
         if not database_url:
             raise ValueError("LEADPILOT_DATABASE_URL must not be empty")
 
+        api_key = os.getenv("LEADPILOT_AI_API_KEY", "").strip() or None
+        requested_ai = os.getenv("LEADPILOT_AI_ENABLED", "false").lower() in {
+            "1",
+            "true",
+            "yes",
+            "on",
+        }
         return cls(
             app_name=os.getenv("LEADPILOT_APP_NAME", "LeadPilot AI").strip(),
             environment=os.getenv("LEADPILOT_ENV", "development").strip(),
@@ -65,6 +82,22 @@ class Settings:
             discovery_slow_response_ms=int(
                 os.getenv("LEADPILOT_DISCOVERY_SLOW_RESPONSE_MS", "3000")
             ),
+            ai_enabled=requested_ai and bool(api_key),
+            ai_provider=os.getenv("LEADPILOT_AI_PROVIDER", "openai").strip().lower(),
+            ai_model=os.getenv("LEADPILOT_AI_MODEL", "gpt-5-mini").strip(),
+            ai_api_key=api_key,
+            ai_timeout_seconds=float(os.getenv("LEADPILOT_AI_TIMEOUT_SECONDS", "60")),
+            ai_max_retries=int(os.getenv("LEADPILOT_AI_MAX_RETRIES", "1")),
+            ai_temperature=float(os.getenv("LEADPILOT_AI_TEMPERATURE", "0.2")),
+            ai_max_output_tokens=int(
+                os.getenv("LEADPILOT_AI_MAX_OUTPUT_TOKENS", "6000")
+            ),
+            ai_input_price_per_million=_optional_float(
+                "LEADPILOT_AI_INPUT_PRICE_PER_MILLION"
+            ),
+            ai_output_price_per_million=_optional_float(
+                "LEADPILOT_AI_OUTPUT_PRICE_PER_MILLION"
+            ),
         )
 
     @property
@@ -75,3 +108,8 @@ class Settings:
 @lru_cache(maxsize=1)
 def get_settings() -> Settings:
     return Settings.from_env()
+
+
+def _optional_float(name: str) -> float | None:
+    value = os.getenv(name, "").strip()
+    return float(value) if value else None

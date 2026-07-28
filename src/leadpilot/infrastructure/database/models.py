@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String, Text, func
+from sqlalchemy import Boolean, DateTime, Float, ForeignKey, Integer, String, Text, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from leadpilot.infrastructure.database.base import Base
@@ -30,6 +30,9 @@ class CompanyModel(Base):
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
     discovery_scans: Mapped[list[DiscoveryScanModel]] = relationship(
+        back_populates="company", cascade="all, delete-orphan", passive_deletes=True
+    )
+    ai_analyses: Mapped[list[DiscoveryAIAnalysisModel]] = relationship(
         back_populates="company", cascade="all, delete-orphan", passive_deletes=True
     )
 
@@ -97,3 +100,61 @@ class DiscoveryScanModel(Base):
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
     company: Mapped[CompanyModel] = relationship(back_populates="discovery_scans")
+    ai_analyses: Mapped[list[DiscoveryAIAnalysisModel]] = relationship(
+        back_populates="scan", cascade="all, delete-orphan", passive_deletes=True
+    )
+
+
+class DiscoveryAIAnalysisModel(Base):
+    __tablename__ = "discovery_ai_analyses"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    discovery_scan_id: Mapped[int] = mapped_column(
+        ForeignKey("discovery_scans.id", ondelete="CASCADE"), index=True
+    )
+    company_id: Mapped[int] = mapped_column(
+        ForeignKey("companies.id", ondelete="CASCADE"), index=True
+    )
+    status: Mapped[str] = mapped_column(String(20), default="Pending", index=True)
+    review_status: Mapped[str] = mapped_column(
+        String(20), default="Unreviewed", index=True
+    )
+    provider: Mapped[str] = mapped_column(String(50))
+    model: Mapped[str] = mapped_column(String(120))
+    prompt_version: Mapped[str] = mapped_column(String(30))
+    schema_version: Mapped[str] = mapped_column(String(30))
+    generated_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), index=True
+    )
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    error_message: Mapped[str | None] = mapped_column(Text)
+    executive_summary: Mapped[str | None] = mapped_column(Text)
+    business_profile: Mapped[str | None] = mapped_column(Text)
+    digital_strengths: Mapped[str] = mapped_column(Text, default="[]")
+    improvement_areas: Mapped[str] = mapped_column(Text, default="[]")
+    business_risks: Mapped[str] = mapped_column(Text, default="[]")
+    quick_wins: Mapped[str] = mapped_column(Text, default="[]")
+    strategic_opportunities: Mapped[str] = mapped_column(Text, default="[]")
+    recommended_services: Mapped[str] = mapped_column(Text, default="[]")
+    implementation_roadmap: Mapped[str] = mapped_column(Text, default="[]")
+    discovery_questions: Mapped[str] = mapped_column(Text, default="[]")
+    outreach_angles: Mapped[str] = mapped_column(Text, default="[]")
+    confidence_notes: Mapped[str | None] = mapped_column(Text)
+    evidence_references: Mapped[str] = mapped_column(Text, default="[]")
+    input_snapshot_hash: Mapped[str] = mapped_column(String(64), index=True)
+    input_token_count: Mapped[int | None] = mapped_column(Integer)
+    output_token_count: Mapped[int | None] = mapped_column(Integer)
+    total_token_count: Mapped[int | None] = mapped_column(Integer)
+    estimated_cost: Mapped[float | None] = mapped_column(Float)
+    latency_ms: Mapped[int | None] = mapped_column(Integer)
+    raw_response_metadata: Mapped[str] = mapped_column(Text, default="{}")
+    reviewed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    reviewer_notes: Mapped[str | None] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), index=True
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+    scan: Mapped[DiscoveryScanModel] = relationship(back_populates="ai_analyses")
+    company: Mapped[CompanyModel] = relationship(back_populates="ai_analyses")
