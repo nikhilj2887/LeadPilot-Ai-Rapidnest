@@ -7,11 +7,33 @@ from pathlib import Path
 
 import streamlit as st
 
-from leadpilot.bootstrap import Container, bootstrap
+from leadpilot.application.admin import AdminService
+from leadpilot.application.auth import (
+    AuthenticationError,
+    Principal,
+    UserStatus,
+)
+from leadpilot.bootstrap import (
+    Container,
+    bootstrap,
+    bootstrap_auth,
+    list_active_organizations,
+)
+from leadpilot.config import get_settings
+from leadpilot.presentation.streamlit.auth_ui import (
+    clear_authenticated_state,
+    render_access_denied,
+    render_login,
+)
 from leadpilot.presentation.streamlit.components import health_badge
-from leadpilot.presentation.streamlit.navigation import PAGES, navigation_label
+from leadpilot.presentation.streamlit.navigation import (
+    PAGES,
+    navigation_label,
+    pages_for_principal,
+)
 from leadpilot.presentation.streamlit.state import switch_organization
 from leadpilot.presentation.streamlit.theme import apply_theme
+from leadpilot.presentation.streamlit.views import platform_admin, team
 
 logger = logging.getLogger(__name__)
 ASSET_DIRECTORY = Path(__file__).with_name("assets")
@@ -20,8 +42,21 @@ ICON_PATH = ASSET_DIRECTORY / "leadpilot-icon.png"
 
 
 @st.cache_resource
-def get_container(organization_id: int | None = None) -> Container:
-    return bootstrap(organization_id=organization_id)
+def get_container(
+    organization_id: int | None = None,
+    user_id: int | None = None,
+    organization_role=None,
+) -> Container:
+    return bootstrap(
+        organization_id=organization_id,
+        user_id=user_id,
+        organization_role=organization_role,
+    )
+
+
+@st.cache_resource
+def get_auth_service():
+    return bootstrap_auth()
 
 
 def organization_selector_required(active_count: int) -> bool:
@@ -54,16 +89,69 @@ def main() -> None:
         initial_sidebar_state="expanded",
     )
     apply_theme()
-    try:
-        default_container = get_container()
-        active = default_container.organizations.list_active()
-        valid_ids = {organization.id for organization in active}
-        requested_id = st.session_state.get(
-            "organization_id", default_container.organization_context.organization_id
+    settings = get_settings()
+    if not settings.auth_enabled:
+        st.title("Authentication setup required")
+        st.info(
+            "Configure Supabase Auth environment variables and enable authentication "
+            "before using LeadPilot AI."
         )
+        return
+    try:
+        auth = get_auth_service()
+    except Exception:
+        logger.exception("Authentication startup failed")
+        st.error("Authentication could not start. Check the application logs.")
+        return
+    principal: Principal | None = st.session_state.get("principal")
+    auth_session = st.session_state.get("auth_session")
+    if principal is None and auth_session is not None:
+        try:
+            refreshed, principal = auth.restore(auth_session.refresh_token)
+            st.session_state.auth_session = refreshed
+            st.session_state.principal = principal
+        except AuthenticationError:
+            clear_authenticated_state()
+    if principal is None:
+        render_login(auth, settings.auth_redirect_url)
+        return
+    try:
+        all_active = list_active_organizations(settings)
+        membership_ids = {
+            item.organization_id
+            for item in principal.memberships
+            if item.status == UserStatus.ACTIVE
+        }
+        active = [
+            organization
+            for organization in all_active
+            if principal.is_super_admin or organization.id in membership_ids
+        ]
+        if not active:
+            render_access_denied("Your account has no active organization memberships.")
+            return
+        valid_ids = {organization.id for organization in active}
+        default_membership = next(
+            (
+                item
+                for item in principal.memberships
+                if item.is_default and item.organization_id in valid_ids
+            ),
+            None,
+        )
+        fallback_id = (
+            default_membership.organization_id if default_membership else active[0].id
+        )
+        requested_id = st.session_state.get("organization_id", fallback_id)
         if requested_id not in valid_ids:
-            requested_id = default_container.organization_context.organization_id
-        container = get_container(requested_id)
+            requested_id = fallback_id
+        principal = auth.select_organization(principal, requested_id)
+        st.session_state.principal = principal
+        st.session_state.organization_id = requested_id
+        effective_role = (
+            principal.current_membership.role if principal.current_membership else None
+        )
+        container = get_container(requested_id, principal.user.id, effective_role)
     except Exception:
         logger.exception("LeadPilot startup failed")
         st.error("LeadPilot could not start. Check the application logs for details.")
@@ -93,15 +181,51 @@ def main() -> None:
         if chosen != requested_id and switch_organization(
             st.session_state, chosen, valid_ids
         ):
+            st.session_state.principal = auth.select_organization(principal, chosen)
             st.rerun()
+    role = (
+        principal.current_membership.role.value
+        if principal.current_membership
+        else principal.user.platform_role.value
+        if principal.user.platform_role
+        else "Platform access"
+    )
+    st.sidebar.markdown(
+        f'<div class="lp-user"><strong>{escape(principal.user.display_name)}</strong>'
+        f"<span>{escape(role)}</span></div>",
+        unsafe_allow_html=True,
+    )
+    if st.sidebar.button("Log out", width="stretch"):
+        try:
+            auth.logout(st.session_state.auth_session, principal)
+        finally:
+            clear_authenticated_state()
+        st.rerun()
+    available_pages = pages_for_principal(principal)
+    if st.session_state.get("navigation") not in available_pages:
+        st.session_state.navigation = "Dashboard"
     selected_page = st.sidebar.radio(
         "Navigation",
-        list(PAGES),
+        available_pages,
         key="navigation",
         format_func=navigation_label,
         label_visibility="collapsed",
     )
-    render_page_safely(PAGES[selected_page], container, on_error=st.error)
+    admin = AdminService(auth, container.organizations, container.identities)
+    if selected_page == "Team":
+        render_page_safely(
+            lambda current: team.render(current, principal, admin),
+            container,
+            on_error=st.error,
+        )
+    elif selected_page == "Platform Admin":
+        render_page_safely(
+            lambda current: platform_admin.render(current, principal, admin),
+            container,
+            on_error=st.error,
+        )
+    else:
+        render_page_safely(PAGES[selected_page], container, on_error=st.error)
     st.sidebar.divider()
     try:
         health = container.health_check.check()

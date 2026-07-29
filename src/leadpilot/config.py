@@ -33,6 +33,11 @@ class Settings:
     ai_max_output_tokens: int = 6000
     ai_input_price_per_million: float | None = None
     ai_output_price_per_million: float | None = None
+    auth_enabled: bool = False
+    supabase_url: str | None = None
+    supabase_anon_key: str | None = None
+    supabase_service_role_key: str | None = None
+    auth_redirect_url: str | None = None
 
     @classmethod
     def from_env(cls, env_file: str | None = ".env") -> Settings:
@@ -57,6 +62,18 @@ class Settings:
             "yes",
             "on",
         }
+        supabase_url = os.getenv("LEADPILOT_SUPABASE_URL", "").strip() or None
+        supabase_anon_key = os.getenv("LEADPILOT_SUPABASE_ANON_KEY", "").strip() or None
+        requested_auth = os.getenv("LEADPILOT_AUTH_ENABLED", "false").lower() in {
+            "1",
+            "true",
+            "yes",
+            "on",
+        }
+        if requested_auth and not (supabase_url and supabase_anon_key):
+            raise ValueError(
+                "Supabase URL and anonymous key are required when authentication is enabled"
+            )
         return cls(
             app_name=os.getenv("LEADPILOT_APP_NAME", "LeadPilot AI").strip(),
             environment=os.getenv("LEADPILOT_ENV", "development").strip(),
@@ -98,6 +115,15 @@ class Settings:
             ai_output_price_per_million=_optional_float(
                 "LEADPILOT_AI_OUTPUT_PRICE_PER_MILLION"
             ),
+            auth_enabled=requested_auth,
+            supabase_url=supabase_url,
+            supabase_anon_key=supabase_anon_key,
+            supabase_service_role_key=os.getenv(
+                "LEADPILOT_SUPABASE_SERVICE_ROLE_KEY", ""
+            ).strip()
+            or None,
+            auth_redirect_url=os.getenv("LEADPILOT_AUTH_REDIRECT_URL", "").strip()
+            or None,
         )
 
     @property

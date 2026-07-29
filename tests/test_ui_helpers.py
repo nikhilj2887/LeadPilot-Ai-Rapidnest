@@ -28,16 +28,16 @@ from leadpilot.presentation.streamlit.discovery_report import (
     social_link_rows,
     website_health_rows,
 )
-from leadpilot.presentation.streamlit.pages.dashboard import (
-    discovery_metric_values,
-    kpi_values,
-)
 from leadpilot.presentation.streamlit.state import (
     open_company_mode,
     reset_company_filters,
     return_to_company_list,
     switch_organization,
     sync_filter_page,
+)
+from leadpilot.presentation.streamlit.views.dashboard import (
+    discovery_metric_values,
+    kpi_values,
 )
 
 
@@ -229,7 +229,7 @@ def test_organization_switch_clears_owned_state_but_keeps_preferences() -> None:
 
 def test_ui_sources_include_milestone_sections_and_controls() -> None:
     streamlit_root = Path(__file__).parents[1] / "src/leadpilot/presentation/streamlit"
-    root = streamlit_root / "pages"
+    root = streamlit_root / "views"
     companies_source = "".join(
         path.read_text()
         for path in (root / "companies.py", streamlit_root / "company_query.py")
@@ -373,7 +373,7 @@ def test_dashboard_discovery_metrics_and_page_error_isolation() -> None:
 def test_theme_is_responsive_without_css_scaling() -> None:
     root = Path(__file__).parents[1] / "src/leadpilot/presentation/streamlit"
     theme = (root / "theme.py").read_text().casefold()
-    discovery = (root / "pages/discovery.py").read_text()
+    discovery = (root / "views/discovery.py").read_text()
     assert "max-width:1560px" in theme
     assert "@media (max-width: 900px)" in theme
     assert "zoom:" not in theme

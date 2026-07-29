@@ -412,5 +412,74 @@ approved assets directory, and the existing LeadPilot logo is used for the
 RapidNest seed. Secrets remain in environment configuration and are never copied
 into organization records or AI prompts.
 
+## Authentication and administration
+
+Milestone 5.6 protects LeadPilot with Supabase Auth while retaining SQLAlchemy as
+the application database. Supabase owns credentials, password recovery, access
+tokens, refresh tokens, and invitation delivery. LeadPilot stores the matching
+user profile, platform role, organization memberships, and audit events. Tokens
+are kept only in the Streamlit session and are never written to application
+tables or logs.
+
+Startup now has two explicit stages:
+
+1. Authenticate or restore a Supabase session and load the local user profile.
+2. Resolve active memberships and construct the existing organization-bound
+   service container only for an organization the user may access.
+
+Unauthenticated users see only the sign-in, forgot-password, and reset-password
+experience. Users with one active membership enter it automatically. Users with
+multiple active memberships receive a selector containing only organizations
+where their membership is active. Suspended and archived organizations remain
+unavailable. Logout revokes the Supabase session and clears identity,
+organization, company, discovery, and AI selections.
+
+### Roles
+
+Organization roles are ordered `Viewer`, `Analyst`, `Manager`, `Admin`, and
+`Owner`. Owner and Admin can access the Team page to invite members, update
+roles/status, and remove memberships. `Super Admin` and `Support Admin` are
+user-level platform roles rather than organization memberships. Only Super Admin
+can access Platform Admin, create or change organizations, invite platform users,
+change account status, and review platform audit history.
+
+Authorization is checked in application services as well as navigation. Hiding a
+menu item is not treated as a security boundary.
+
+### Invitations and audit history
+
+Supabase sends invitation and password-reset messages. LeadPilot creates the
+invited local profile and membership as `INVITED`; the first successful Supabase
+login activates both. Account statuses are `ACTIVE`, `INVITED`, `DISABLED`, and
+`LOCKED`.
+
+The reusable audit repository records login, logout, organization creation and
+updates, user invitations, role changes, organization switching, and destructive
+company/discovery operations. Audit detail values are structured JSON and must
+never contain credentials or tokens.
+
+### Supabase configuration
+
+Apply migrations and configure:
+
+```dotenv
+LEADPILOT_AUTH_ENABLED=true
+LEADPILOT_SUPABASE_URL=https://your-project.supabase.co
+LEADPILOT_SUPABASE_ANON_KEY=your-public-anon-key
+LEADPILOT_SUPABASE_SERVICE_ROLE_KEY=your-server-only-service-role-key
+LEADPILOT_AUTH_REDIRECT_URL=https://your-leadpilot-host/
+```
+
+The service-role key is required only for server-side invitation/admin actions
+and must never be exposed to a browser or committed. Configure the matching
+redirect URL and email templates in Supabase. When authentication is disabled or
+incompletely configured, the UI fails closed with a setup message rather than
+granting demo access.
+
+Streamlit session restoration covers reruns and active browser sessions through
+Supabase refresh tokens. Durable cross-browser “remember me” cookies require a
+trusted HTTPS cookie/session layer and are intentionally not emulated with URL
+parameters or browser-readable storage.
+
 - Website: [https://www.therapidnest.com](https://www.therapidnest.com)
 - Email: [contact@therapidnest.com](mailto:contact@therapidnest.com)

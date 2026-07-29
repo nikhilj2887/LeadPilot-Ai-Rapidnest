@@ -25,8 +25,13 @@ from leadpilot.infrastructure.database.models import (
 
 
 class OrganizationRepository:
-    def __init__(self, session_factory: Callable[[], Session]) -> None:
+    def __init__(
+        self,
+        session_factory: Callable[[], Session],
+        audit: Callable[[str, str, str], None] | None = None,
+    ) -> None:
         self._session_factory = session_factory
+        self._audit = audit
 
     def create(self, values: OrganizationCreate) -> OrganizationDetails:
         with self._session_factory() as session, session.begin():
@@ -37,7 +42,10 @@ class OrganizationRepository:
             except IntegrityError as exc:
                 raise ValueError("Organization slug already exists") from exc
             session.refresh(model)
-            return self._details(model)
+            result = self._details(model)
+        if self._audit:
+            self._audit("CREATE_ORGANIZATION", "organization", str(result.id))
+        return result
 
     def get(self, organization_id: int) -> OrganizationDetails | None:
         with self._session_factory() as session:
@@ -60,6 +68,13 @@ class OrganizationRepository:
             )
             return [OrganizationSummary.model_validate(model) for model in models]
 
+    def list_all(self) -> list[OrganizationSummary]:
+        with self._session_factory() as session:
+            models = session.scalars(
+                select(OrganizationModel).order_by(OrganizationModel.display_name)
+            )
+            return [OrganizationSummary.model_validate(model) for model in models]
+
     def update(
         self, organization_id: int, values: OrganizationUpdate
     ) -> OrganizationDetails | None:
@@ -71,7 +86,10 @@ class OrganizationRepository:
                 setattr(model, key, value)
             session.flush()
             session.refresh(model)
-            return self._details(model)
+            result = self._details(model)
+        if self._audit:
+            self._audit("UPDATE_ORGANIZATION", "organization", str(organization_id))
+        return result
 
     def get_branding(self, organization_id: int) -> OrganizationBranding | None:
         with self._session_factory() as session:

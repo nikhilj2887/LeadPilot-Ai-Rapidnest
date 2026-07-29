@@ -43,6 +43,9 @@ class OrganizationModel(Base):
     services: Mapped[list[OrganizationServiceModel]] = relationship(
         back_populates="organization", cascade="all, delete-orphan"
     )
+    memberships: Mapped[list[OrganizationMembershipModel]] = relationship(
+        back_populates="organization", cascade="all, delete-orphan"
+    )
 
 
 class OrganizationBrandingModel(Base):
@@ -90,6 +93,75 @@ class OrganizationServiceModel(Base):
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
     organization: Mapped[OrganizationModel] = relationship(back_populates="services")
+
+
+class UserModel(Base):
+    __tablename__ = "users"
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    supabase_user_id: Mapped[str] = mapped_column(String(100), unique=True, index=True)
+    first_name: Mapped[str | None] = mapped_column(String(100))
+    last_name: Mapped[str | None] = mapped_column(String(100))
+    email: Mapped[str] = mapped_column(String(320), unique=True, index=True)
+    phone: Mapped[str | None] = mapped_column(String(50))
+    avatar_url: Mapped[str | None] = mapped_column(String(500))
+    status: Mapped[str] = mapped_column(String(20), default="ACTIVE", index=True)
+    platform_role: Mapped[str | None] = mapped_column(String(30), index=True)
+    last_login_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+    memberships: Mapped[list[OrganizationMembershipModel]] = relationship(
+        back_populates="user", cascade="all, delete-orphan"
+    )
+
+
+class OrganizationMembershipModel(Base):
+    __tablename__ = "organization_memberships"
+    __table_args__ = (
+        UniqueConstraint(
+            "organization_id", "user_id", name="uq_memberships_organization_user"
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    organization_id: Mapped[int] = mapped_column(
+        ForeignKey("organizations.id", ondelete="CASCADE"), index=True
+    )
+    user_id: Mapped[int] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), index=True
+    )
+    role: Mapped[str] = mapped_column(String(20), index=True)
+    status: Mapped[str] = mapped_column(String(20), default="INVITED", index=True)
+    is_default: Mapped[bool] = mapped_column(Boolean, default=False)
+    joined_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+    organization: Mapped[OrganizationModel] = relationship(back_populates="memberships")
+    user: Mapped[UserModel] = relationship(back_populates="memberships")
+
+
+class AuditLogModel(Base):
+    __tablename__ = "audit_logs"
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    organization_id: Mapped[int | None] = mapped_column(
+        ForeignKey("organizations.id", ondelete="SET NULL"), index=True
+    )
+    user_id: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"), index=True
+    )
+    action: Mapped[str] = mapped_column(String(80), index=True)
+    entity: Mapped[str] = mapped_column(String(80), index=True)
+    entity_id: Mapped[str | None] = mapped_column(String(100))
+    details_json: Mapped[str] = mapped_column(Text, default="{}")
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), index=True
+    )
 
 
 class CompanyModel(Base):

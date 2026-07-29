@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import datetime
 from time import monotonic
@@ -77,6 +78,7 @@ class DiscoveryAIService:
         settings: Any,
         organizations: Any | None = None,
         organization_id: int = 1,
+        authorize_write: Callable[[], None] | None = None,
     ) -> None:
         self._repository, self._companies, self._discovery = (
             repository,
@@ -86,6 +88,7 @@ class DiscoveryAIService:
         self._provider, self._settings = provider, settings
         self._organizations = organizations
         self._organization_id = organization_id
+        self._authorize_write = authorize_write
 
     @property
     def availability(self) -> tuple[bool, str]:
@@ -99,6 +102,8 @@ class DiscoveryAIService:
     def generate(
         self, scan_id: int, *, regenerate: bool = False
     ) -> DiscoveryAIAnalysis:
+        if self._authorize_write:
+            self._authorize_write()
         scan = self._discovery.get_scan(scan_id)
         if scan.status != "Completed":
             raise DiscoveryAIError(
@@ -227,6 +232,8 @@ class DiscoveryAIService:
     def update_review(
         self, analysis_id: int, status: str, notes: str | None = None
     ) -> DiscoveryAIAnalysis:
+        if self._authorize_write:
+            self._authorize_write()
         if status not in REVIEW_STATUSES:
             raise DiscoveryAIError("Invalid review status.")
         return self._repository.update_review(analysis_id, status, notes)

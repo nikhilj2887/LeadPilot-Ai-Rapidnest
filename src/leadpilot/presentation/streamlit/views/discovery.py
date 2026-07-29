@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+"""Discovery views rendered only through the protected app entry point."""
+
 from html import escape
 
 import streamlit as st

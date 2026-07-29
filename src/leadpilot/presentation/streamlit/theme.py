@@ -46,6 +46,19 @@ APP_CSS = """
   font-weight:650; line-height:1.35; overflow:hidden;
   text-overflow:ellipsis; white-space:nowrap;
 }
+.lp-user {
+  display:flex; flex-direction:column; gap:.18rem; margin:.7rem 0 .45rem;
+  padding:.72rem .85rem; border-top:1px solid var(--lp-border);
+  border-bottom:1px solid var(--lp-border);
+}
+.lp-user strong {
+  color:rgba(250,250,255,.96); font-size:.86rem;
+  overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+}
+.lp-user span { color:var(--lp-muted); font-size:.75rem; }
+.lp-login-shell {
+  max-width:560px; margin:7vh auto 0;
+}
 [data-testid="stSidebar"] [data-testid="stSelectbox"] {
   width:100%; margin:0 0 .9rem;
 }
