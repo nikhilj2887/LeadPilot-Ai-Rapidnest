@@ -185,6 +185,19 @@ def test_sidebar_css_preserves_native_collapse_and_expand_controls() -> None:
     assert all("pointer-events:none" not in rule for rule in sidebar_rules)
 
 
+def test_authentication_ui_is_responsive_and_preserves_streamlit_controls() -> None:
+    root = Path(__file__).parents[1] / "src/leadpilot/presentation/streamlit"
+    auth_source = (root / "auth_ui.py").read_text()
+    compact = "".join(auth_source.casefold().split())
+    assert "lp-auth-brand" in auth_source
+    assert "lp-auth-card" in auth_source
+    assert "@media(max-width:850px)" in compact
+    assert "if an account exists for this email" in auth_source.casefold()
+    assert '[data-testid="sttoolbar"]{opacity:.55' in compact
+    assert "stsidebarcollapsedcontrol" not in compact
+    assert "visibility:hidden" not in compact
+
+
 def test_organization_context_and_selector_rules_are_explicit() -> None:
     root = Path(__file__).parents[1]
     app_source = (root / "src/leadpilot/presentation/streamlit/app.py").read_text()

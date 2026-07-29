@@ -92,6 +92,7 @@ def identity_stack():
 
 def active_principal(identity_stack, role: OrganizationRole) -> Principal:
     organization, _, identities, provider, auth = identity_stack
+    identities.create_invited_user(provider.user_id, provider.email)
     user = identities.sync_authenticated_user(provider.user_id, provider.email)
     identities.create_membership(
         organization.id, user.id, role, status=UserStatus.ACTIVE
@@ -102,6 +103,7 @@ def active_principal(identity_stack, role: OrganizationRole) -> Principal:
 
 def test_login_restore_logout_and_audit(identity_stack) -> None:
     organization, _, identities, provider, auth = identity_stack
+    identities.create_invited_user(provider.user_id, provider.email)
     user = identities.sync_authenticated_user(provider.user_id, provider.email)
     identities.create_membership(
         organization.id,
@@ -125,9 +127,18 @@ def test_login_restore_logout_and_audit(identity_stack) -> None:
 
 def test_disabled_user_cannot_authenticate(identity_stack) -> None:
     _, _, identities, provider, auth = identity_stack
+    identities.create_invited_user(provider.user_id, provider.email)
     user = identities.sync_authenticated_user(provider.user_id, provider.email)
     identities.update_user(user.id, status=UserStatus.DISABLED.value)
-    with pytest.raises(AuthenticationError, match="not active"):
+    with pytest.raises(AuthenticationError, match="inactive"):
+        auth.login(provider.email, "correct-password")
+
+
+def test_authenticated_identity_without_application_user_is_denied(
+    identity_stack,
+) -> None:
+    _, _, _, provider, auth = identity_stack
+    with pytest.raises(AuthenticationError, match="not linked"):
         auth.login(provider.email, "correct-password")
 
 
@@ -141,7 +152,7 @@ def test_membership_enforces_organization_access(identity_stack) -> None:
             default_currency="USD",
         )
     )
-    user = identities.sync_authenticated_user(provider.user_id, provider.email)
+    user = identities.create_invited_user(provider.user_id, provider.email)
     identities.create_membership(
         organization.id,
         user.id,

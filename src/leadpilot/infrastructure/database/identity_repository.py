@@ -9,6 +9,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from leadpilot.application.auth import (
+    ApplicationUserNotFoundError,
     Membership,
     OrganizationRole,
     PlatformRole,
@@ -32,12 +33,10 @@ class IdentityRepository:
                 select(UserModel).where(UserModel.supabase_user_id == supabase_user_id)
             )
             if model is None:
-                model = UserModel(
-                    supabase_user_id=supabase_user_id,
-                    email=email.casefold(),
-                    status=UserStatus.ACTIVE.value,
+                raise ApplicationUserNotFoundError(
+                    "Your identity is authenticated but is not linked to a "
+                    "LeadPilot application user. Ask an administrator to grant access."
                 )
-                session.add(model)
             else:
                 model.email = email.casefold()
                 if model.status == UserStatus.INVITED.value:

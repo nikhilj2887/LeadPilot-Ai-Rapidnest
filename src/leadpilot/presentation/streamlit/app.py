@@ -91,17 +91,22 @@ def main() -> None:
     apply_theme()
     settings = get_settings()
     if not settings.auth_enabled:
-        st.title("Authentication setup required")
-        st.info(
-            "Configure Supabase Auth environment variables and enable authentication "
-            "before using LeadPilot AI."
+        render_access_denied(
+            "Authentication has not been configured for this deployment.",
+            next_action=(
+                "Configure the required Supabase environment variables, then restart "
+                "the application."
+            ),
         )
         return
     try:
         auth = get_auth_service()
     except Exception:
         logger.exception("Authentication startup failed")
-        st.error("Authentication could not start. Check the application logs.")
+        render_access_denied(
+            "The authentication service is temporarily unavailable.",
+            next_action="Ask the deployment administrator to review the configuration.",
+        )
         return
     principal: Principal | None = st.session_state.get("principal")
     auth_session = st.session_state.get("auth_session")
@@ -128,7 +133,41 @@ def main() -> None:
             if principal.is_super_admin or organization.id in membership_ids
         ]
         if not active:
-            render_access_denied("Your account has no active organization memberships.")
+
+            def denied_logout() -> None:
+                try:
+                    auth.logout(st.session_state.auth_session, principal)
+                finally:
+                    clear_authenticated_state()
+                st.rerun()
+
+            has_active_membership = any(
+                item.status == UserStatus.ACTIVE for item in principal.memberships
+            )
+            has_invitation = any(
+                item.status == UserStatus.INVITED for item in principal.memberships
+            )
+            has_inactive_membership = bool(principal.memberships) and not (
+                has_active_membership or has_invitation
+            )
+            if has_active_membership:
+                message = "Your assigned organization is not currently active."
+                next_action = "Contact a platform administrator."
+            elif has_invitation:
+                message = "Your organization invitation has not been activated yet."
+                next_action = "Ask an organization administrator to activate access."
+            elif has_inactive_membership:
+                message = "Your organization membership is inactive."
+                next_action = "Ask an organization administrator to restore access."
+            else:
+                message = (
+                    "Your account is authenticated but has not been assigned to an "
+                    "organization."
+                )
+                next_action = "Ask an organization administrator to grant access."
+            render_access_denied(
+                message, next_action=next_action, on_logout=denied_logout
+            )
             return
         valid_ids = {organization.id for organization in active}
         default_membership = next(
@@ -154,7 +193,10 @@ def main() -> None:
         container = get_container(requested_id, principal.user.id, effective_role)
     except Exception:
         logger.exception("LeadPilot startup failed")
-        st.error("LeadPilot could not start. Check the application logs for details.")
+        render_access_denied(
+            "LeadPilot could not reach its application database.",
+            next_action="Try again later or ask the deployment administrator for help.",
+        )
         return
 
     st.sidebar.image(str(LOGO_PATH), width="stretch")

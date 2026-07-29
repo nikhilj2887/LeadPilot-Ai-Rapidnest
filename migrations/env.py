@@ -3,11 +3,11 @@ from __future__ import annotations
 from logging.config import fileConfig
 
 from alembic import context
-from sqlalchemy import engine_from_config, pool
 
 from leadpilot.config import Settings
 from leadpilot.infrastructure.database import models  # noqa: F401
 from leadpilot.infrastructure.database.base import Base
+from leadpilot.infrastructure.database.engine import create_database_engine
 
 config = context.config
 if config.config_file_name is not None:
@@ -30,11 +30,7 @@ def run_migrations_offline() -> None:
 
 
 def run_migrations_online() -> None:
-    connectable = engine_from_config(
-        config.get_section(config.config_ini_section, {}),
-        prefix="sqlalchemy.",
-        poolclass=pool.NullPool,
-    )
+    connectable = create_database_engine(config.get_main_option("sqlalchemy.url"))
     with connectable.connect() as connection:
         context.configure(
             connection=connection,
@@ -43,6 +39,7 @@ def run_migrations_online() -> None:
         )
         with context.begin_transaction():
             context.run_migrations()
+    connectable.dispose()
 
 
 if context.is_offline_mode():

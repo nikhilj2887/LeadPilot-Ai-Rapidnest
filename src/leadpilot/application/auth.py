@@ -39,6 +39,10 @@ class AuthenticationError(ValueError):
     pass
 
 
+class ApplicationUserNotFoundError(AuthenticationError):
+    pass
+
+
 class AuthorizationError(PermissionError):
     pass
 
@@ -164,7 +168,9 @@ class AuthenticationService:
             session.supabase_user_id, session.email
         )
         if user.status != UserStatus.ACTIVE:
-            raise AuthenticationError("This user account is not active.")
+            raise AuthenticationError(
+                "Your LeadPilot account is inactive. Contact an administrator."
+            )
         memberships = tuple(self.repository.list_memberships(user.id))
         principal = Principal(user, memberships)
         self.repository.log("LOGIN", "session", user_id=user.id)
@@ -176,7 +182,9 @@ class AuthenticationService:
             session.supabase_user_id, session.email
         )
         if user.status != UserStatus.ACTIVE:
-            raise AuthenticationError("This user account is not active.")
+            raise AuthenticationError(
+                "Your LeadPilot account is inactive. Contact an administrator."
+            )
         return session, Principal(
             user, tuple(self.repository.list_memberships(user.id))
         )

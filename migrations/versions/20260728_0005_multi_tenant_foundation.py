@@ -208,6 +208,13 @@ def upgrade() -> None:
             for order, name in enumerate(SERVICES, 1)
         ],
     )
+    if op.get_bind().dialect.name == "postgresql":
+        op.execute(
+            sa.text(
+                "SELECT setval(pg_get_serial_sequence('organizations', 'id'), "
+                "(SELECT MAX(id) FROM organizations), true)"
+            )
+        )
 
     op.drop_index("ix_companies_name", table_name="companies")
     for table in ("companies", "discovery_scans", "discovery_ai_analyses"):
