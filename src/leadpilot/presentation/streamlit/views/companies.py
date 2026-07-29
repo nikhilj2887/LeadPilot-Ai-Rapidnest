@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+"""Company views rendered only through the protected app entry point."""
+
 from collections.abc import Sequence
 from html import escape
 

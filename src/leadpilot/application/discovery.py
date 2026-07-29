@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from typing import Any, Protocol
@@ -57,6 +58,7 @@ class DiscoveryRepository(Protocol):
     def list_by_company(self, company_id: int) -> list[DiscoveryScan]: ...
     def list_recent(self, limit: int = 50) -> list[DiscoveryScan]: ...
     def summary(self) -> DiscoverySummary: ...
+    def delete(self, scan_id: int) -> bool: ...
 
 
 class Scanner(Protocol):
@@ -69,14 +71,20 @@ class DiscoveryService:
         repository: DiscoveryRepository,
         companies: CompanyRepository,
         scanner: Scanner,
+        audit: Callable[[str, str, str], None] | None = None,
+        authorize_write: Callable[[], None] | None = None,
     ) -> None:
         self._repository = repository
         self._companies = companies
         self._scanner = scanner
+        self._audit = audit
+        self._authorize_write = authorize_write
 
     def run_scan(
         self, company_id: int, website_url: str | None = None
     ) -> DiscoveryScan:
+        if self._authorize_write:
+            self._authorize_write()
         company = self._companies.get_by_id(company_id)
         if company is None:
             raise CompanyNotFoundError(f"Company {company_id} was not found")
@@ -112,6 +120,14 @@ class DiscoveryService:
 
     def dashboard_summary(self) -> DiscoverySummary:
         return self._repository.summary()
+
+    def delete_scan(self, scan_id: int) -> None:
+        if self._authorize_write:
+            self._authorize_write()
+        if not self._repository.delete(scan_id):
+            raise DiscoveryError("That discovery report is no longer available.")
+        if self._audit:
+            self._audit("DELETE_DISCOVERY", "discovery_scan", str(scan_id))
 
 
 def utcnow() -> datetime:

@@ -412,5 +412,203 @@ approved assets directory, and the existing LeadPilot logo is used for the
 RapidNest seed. Secrets remain in environment configuration and are never copied
 into organization records or AI prompts.
 
+## Authentication and administration
+
+Milestone 5.6 protects LeadPilot with Supabase Auth while retaining SQLAlchemy as
+the application database. Supabase owns credentials, password recovery, access
+tokens, refresh tokens, and invitation delivery. LeadPilot stores the matching
+user profile, platform role, organization memberships, and audit events. Tokens
+are kept only in the Streamlit session and are never written to application
+tables or logs.
+
+Startup now has two explicit stages:
+
+1. Authenticate or restore a Supabase session and load the local user profile.
+2. Resolve active memberships and construct the existing organization-bound
+   service container only for an organization the user may access.
+
+Unauthenticated users see only the sign-in, forgot-password, and reset-password
+experience. Users with one active membership enter it automatically. Users with
+multiple active memberships receive a selector containing only organizations
+where their membership is active. Suspended and archived organizations remain
+unavailable. Logout revokes the Supabase session and clears identity,
+organization, company, discovery, and AI selections.
+
+### Roles
+
+Organization roles are ordered `Viewer`, `Analyst`, `Manager`, `Admin`, and
+`Owner`. Owner and Admin can access the Team page to invite members, update
+roles/status, and remove memberships. `Super Admin` and `Support Admin` are
+user-level platform roles rather than organization memberships. Only Super Admin
+can access Platform Admin, create or change organizations, invite platform users,
+change account status, and review platform audit history.
+
+Authorization is checked in application services as well as navigation. Hiding a
+menu item is not treated as a security boundary.
+
+### Invitations and audit history
+
+Supabase sends invitation and password-reset messages. LeadPilot creates the
+invited local profile and membership as `INVITED`; the first successful Supabase
+login activates both. Account statuses are `ACTIVE`, `INVITED`, `DISABLED`, and
+`LOCKED`.
+
+The reusable audit repository records login, logout, organization creation and
+updates, user invitations, role changes, organization switching, and destructive
+company/discovery operations. Audit detail values are structured JSON and must
+never contain credentials or tokens.
+
+### Supabase configuration
+
+Apply migrations and configure:
+
+```dotenv
+LEADPILOT_AUTH_ENABLED=true
+LEADPILOT_SUPABASE_URL=https://your-project.supabase.co
+LEADPILOT_SUPABASE_ANON_KEY=your-public-anon-key
+LEADPILOT_SUPABASE_SERVICE_ROLE_KEY=your-server-only-service-role-key
+LEADPILOT_AUTH_REDIRECT_URL=https://your-leadpilot-host/
+```
+
+The service-role key is required only for server-side invitation/admin actions
+and must never be exposed to a browser or committed. Configure the matching
+redirect URL and email templates in Supabase. When authentication is disabled or
+incompletely configured, the UI fails closed with a setup message rather than
+granting demo access.
+
+Streamlit session restoration covers reruns and active browser sessions through
+Supabase refresh tokens. Durable cross-browser “remember me” cookies require a
+trusted HTTPS cookie/session layer and are intentionally not emulated with URL
+parameters or browser-readable storage.
+
+## Supabase PostgreSQL deployment
+
+SQLite remains supported for tests and optional local development:
+
+```dotenv
+LEADPILOT_DATABASE_URL=sqlite:///./data/leadpilot.db
+```
+
+Production data can use Supabase PostgreSQL through the installed
+`psycopg[binary]` driver. In Supabase Dashboard, open **Connect**, then copy the
+ORM/SQLAlchemy or PostgreSQL connection details. Convert the scheme to
+`postgresql+psycopg://`. Keep the value only in `.env` or deployment secrets:
+
+```dotenv
+LEADPILOT_DATABASE_URL=postgresql+psycopg://postgres.PROJECT_REF:YOUR_URL_ENCODED_DATABASE_PASSWORD@POOLER_HOST:6543/postgres
+```
+
+Prefer Supabase's transaction pooler for deployed Streamlit environments,
+especially where direct IPv6 connectivity is unavailable. A direct connection
+normally uses `db.PROJECT_REF.supabase.co:5432`; confirm that the deployment
+supports IPv6 before choosing it. Percent-encode database-password characters
+such as `@`, `:`, `/`, `#`, `%`, and `?` (for example with
+`urllib.parse.quote(password, safe="")`). Never paste the decoded password into
+logs, documentation, or version control.
+
+Install dependencies and create the complete schema exclusively through
+Alembic:
+
+```bash
+.venv/bin/python -m pip install -e '.[dev]'
+LEADPILOT_DATABASE_URL='postgresql+psycopg://…' .venv/bin/python -m alembic upgrade head
+```
+
+Verify application tables without reading any row data:
+
+```sql
+SELECT table_name
+FROM information_schema.tables
+WHERE table_schema = 'public'
+  AND table_name IN (
+    'alembic_version', 'organizations', 'organization_branding',
+    'organization_services', 'users', 'organization_memberships', 'companies',
+    'discovery_scans', 'discovery_ai_analyses', 'audit_logs'
+  )
+ORDER BY table_name;
+```
+
+### Seed, migrate, and bootstrap
+
+Migration `20260728_0005` seeds the canonical RapidNest organization on an empty
+database. The explicit seed command is safe to rerun and repairs missing
+canonical branding or service rows without duplicating them:
+
+```bash
+.venv/bin/python scripts/seed_rapidnest.py --database-url 'postgresql+psycopg://…'
+```
+
+Back up SQLite first. The data utility accepts both URLs explicitly, copies only
+LeadPilot-owned tables in foreign-key order, skips rows whose primary keys
+already exist, and never copies `alembic_version` or Supabase Auth schemas:
+
+```bash
+# Dry run (default; performs no writes)
+.venv/bin/python scripts/migrate_sqlite_to_postgres.py \
+  --source-url 'sqlite:///./data/leadpilot.db' \
+  --target-url 'postgresql+psycopg://…'
+
+# Actual transaction
+.venv/bin/python scripts/migrate_sqlite_to_postgres.py \
+  --source-url 'sqlite:///./data/leadpilot.db' \
+  --target-url 'postgresql+psycopg://…' --execute
+```
+
+Run the dry run again after migration to compare source counts and skipped
+counts. PostgreSQL sequences are advanced after explicit integer IDs are copied.
+
+Link an existing Supabase Auth identity to RapidNest without creating or
+changing its password:
+
+```bash
+.venv/bin/python scripts/bootstrap_platform_admin.py \
+  --database-url 'postgresql+psycopg://…' \
+  --supabase-user-id '00000000-0000-0000-0000-000000000000' \
+  --email 'owner@example.com' --first-name 'First' --last-name 'Owner' \
+  --organization-slug rapidnest --organization-role OWNER \
+  --platform-role SUPER_ADMIN
+```
+
+The command asks for confirmation unless `--yes` is supplied. It is
+transactional and rerunnable, validates identity conflicts, activates the
+membership, sets the first membership as default, and writes an audit event.
+
+### Troubleshooting
+
+- **Authentication works but access is denied:** run the bootstrap command with
+  the exact Supabase Auth UUID and verify an `ACTIVE` RapidNest membership.
+- **“relation does not exist”:** point `LEADPILOT_DATABASE_URL` at the intended
+  project and run `alembic upgrade head`.
+- **Invalid password:** URL-encode the password and confirm it in Dashboard →
+  Connect. Do not log the URL.
+- **IPv4/IPv6 failure:** use the Supabase pooler rather than the direct database
+  hostname when the host cannot route IPv6.
+- **Pooler versus direct:** use the pooler for deployed Streamlit; use direct
+  only where long-lived direct connections and IPv6 are supported.
+- **Alembic failure:** confirm the URL scheme is `postgresql+psycopg://`, inspect
+  sanitized application logs, and do not recreate tables manually.
+- **Missing driver:** reinstall project dependencies so `psycopg[binary]` is
+  available.
+- **Return to local SQLite:** restore
+  `LEADPILOT_DATABASE_URL=sqlite:///./data/leadpilot.db` and restart.
+
+### Rollout checklist
+
+1. Create or select the Supabase project.
+2. Back up the local SQLite database.
+3. Obtain the Supabase PostgreSQL connection string.
+4. Set `LEADPILOT_DATABASE_URL` locally without committing it.
+5. Install PostgreSQL dependencies.
+6. Run `alembic upgrade head`.
+7. Run the rerunnable RapidNest seed.
+8. Dry-run the SQLite-to-PostgreSQL migration.
+9. Run the actual migration.
+10. Verify record counts and application tables.
+11. Bootstrap the first platform administrator.
+12. Start Streamlit and sign in with the existing Supabase Auth user.
+13. Verify RapidNest access, tenant isolation, and admin portal access.
+14. Verify logout and password recovery.
+15. Review audit logs and retain the SQLite backup until acceptance is complete.
+
 - Website: [https://www.therapidnest.com](https://www.therapidnest.com)
 - Email: [contact@therapidnest.com](mailto:contact@therapidnest.com)

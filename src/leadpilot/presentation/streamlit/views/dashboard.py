@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+"""Dashboard view rendered only through the protected app entry point."""
+
 import logging
 
 import pandas as pd

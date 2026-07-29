@@ -37,3 +37,19 @@ def test_settings_reject_invalid_log_level(monkeypatch: pytest.MonkeyPatch) -> N
 
     with pytest.raises(ValueError, match="LEADPILOT_LOG_LEVEL"):
         Settings.from_env(env_file=None)
+
+
+def test_authentication_requires_complete_supabase_configuration(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("LEADPILOT_AUTH_ENABLED", "true")
+    monkeypatch.delenv("LEADPILOT_SUPABASE_URL", raising=False)
+    monkeypatch.delenv("LEADPILOT_SUPABASE_ANON_KEY", raising=False)
+    with pytest.raises(ValueError, match="Supabase URL"):
+        Settings.from_env(env_file=None)
+
+    monkeypatch.setenv("LEADPILOT_SUPABASE_URL", "https://project.supabase.co")
+    monkeypatch.setenv("LEADPILOT_SUPABASE_ANON_KEY", "public-anon-key")
+    settings = Settings.from_env(env_file=None)
+    assert settings.auth_enabled
+    assert settings.supabase_url == "https://project.supabase.co"

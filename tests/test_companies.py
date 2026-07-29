@@ -15,7 +15,7 @@ from leadpilot.application.companies import (
 )
 from leadpilot.infrastructure.database.base import Base
 from leadpilot.infrastructure.database.company_repository import CompanyRepository
-from leadpilot.presentation.streamlit.pages.companies import (
+from leadpilot.presentation.streamlit.views.companies import (
     PAGE_SIZE,
     filter_companies,
     paginate,
@@ -246,10 +246,10 @@ def test_ui_pagination_uses_ten_items_per_page() -> None:
 def test_ui_and_dashboard_expose_required_controls_and_sections() -> None:
     root = Path(__file__).parents[1]
     companies_page = (
-        root / "src/leadpilot/presentation/streamlit/pages/companies.py"
+        root / "src/leadpilot/presentation/streamlit/views/companies.py"
     ).read_text()
     dashboard = (
-        root / "src/leadpilot/presentation/streamlit/pages/dashboard.py"
+        root / "src/leadpilot/presentation/streamlit/views/dashboard.py"
     ).read_text()
     for label in (
         "Add Company",

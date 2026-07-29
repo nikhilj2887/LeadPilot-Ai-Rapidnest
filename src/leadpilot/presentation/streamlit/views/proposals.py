@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+"""Proposal views rendered only through the protected app entry point."""
+
 import streamlit as st
 
 from leadpilot.presentation.streamlit.components import page_header, section_header

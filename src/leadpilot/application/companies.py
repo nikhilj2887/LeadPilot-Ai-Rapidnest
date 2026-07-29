@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import datetime
 from typing import Protocol
@@ -70,8 +71,15 @@ class CompanyRepository(Protocol):
 
 
 class CompanyService:
-    def __init__(self, repository: CompanyRepository) -> None:
+    def __init__(
+        self,
+        repository: CompanyRepository,
+        audit: Callable[[str, str, str], None] | None = None,
+        authorize_write: Callable[[], None] | None = None,
+    ) -> None:
         self._repository = repository
+        self._audit = audit
+        self._authorize_write = authorize_write
 
     def list_companies(self) -> list[Company]:
         return self._repository.list_all()
@@ -101,6 +109,8 @@ class CompanyService:
         source: str | None = None,
         notes: str | None = None,
     ) -> Company:
+        if self._authorize_write:
+            self._authorize_write()
         values = self._validate(
             name, website, industry, country, city, company_size, status, source, notes
         )
@@ -122,6 +132,8 @@ class CompanyService:
         source: str | None = None,
         notes: str | None = None,
     ) -> Company:
+        if self._authorize_write:
+            self._authorize_write()
         values = self._validate(
             name, website, industry, country, city, company_size, status, source, notes
         )
@@ -134,8 +146,12 @@ class CompanyService:
         return model
 
     def delete_company(self, company_id: int) -> None:
+        if self._authorize_write:
+            self._authorize_write()
         if not self._repository.delete(company_id):
             raise CompanyNotFoundError(f"Company {company_id} was not found")
+        if self._audit:
+            self._audit("DELETE_COMPANY", "company", str(company_id))
 
     def metrics(self) -> CompanyMetrics:
         counts = self._repository.count_by_status()

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+"""Settings view rendered only through the protected app entry point."""
+
 import streamlit as st
 from pydantic import ValidationError
 

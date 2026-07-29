@@ -6,11 +6,17 @@ from sqlalchemy import Engine
 from sqlalchemy.orm import Session, sessionmaker
 
 from leadpilot.application.ai_provider import AIProviderError, DisabledAIProvider
+from leadpilot.application.auth import (
+    ROLE_LEVEL,
+    AuthenticationService,
+    AuthorizationError,
+    OrganizationRole,
+)
 from leadpilot.application.companies import CompanyService
 from leadpilot.application.discovery import DiscoveryService
 from leadpilot.application.discovery_ai import DiscoveryAIService
 from leadpilot.application.health import HealthCheckService
-from leadpilot.application.organizations import OrganizationContext
+from leadpilot.application.organizations import OrganizationContext, OrganizationSummary
 from leadpilot.config import Settings, get_settings
 from leadpilot.infrastructure.ai_providers import create_ai_provider
 from leadpilot.infrastructure.database.ai_analysis_repository import (
@@ -19,12 +25,14 @@ from leadpilot.infrastructure.database.ai_analysis_repository import (
 from leadpilot.infrastructure.database.company_repository import CompanyRepository
 from leadpilot.infrastructure.database.discovery_repository import DiscoveryRepository
 from leadpilot.infrastructure.database.engine import create_database_engine
+from leadpilot.infrastructure.database.identity_repository import IdentityRepository
 from leadpilot.infrastructure.database.organization_repository import (
     OrganizationRepository,
 )
 from leadpilot.infrastructure.database.session import create_session_factory
 from leadpilot.infrastructure.discovery_client import WebsiteClient
 from leadpilot.infrastructure.discovery_scanner import WebsiteScanner
+from leadpilot.infrastructure.supabase_auth import SupabaseAuthProvider
 from leadpilot.logging import configure_logging
 
 
@@ -39,23 +47,62 @@ class Container:
     companies: CompanyService
     discovery: DiscoveryService
     discovery_ai: DiscoveryAIService
+    identities: IdentityRepository
 
     def dispose(self) -> None:
         self.engine.dispose()
 
 
 def bootstrap(
-    settings: Settings | None = None, organization_id: int | None = None
+    settings: Settings | None = None,
+    organization_id: int | None = None,
+    user_id: int | None = None,
+    organization_role: OrganizationRole | None = None,
 ) -> Container:
     resolved_settings = settings or get_settings()
     configure_logging(resolved_settings.numeric_log_level)
     engine = create_database_engine(resolved_settings.database_url)
     session_factory = create_session_factory(engine)
-    organization_repository = OrganizationRepository(session_factory)
+    identity_repository = IdentityRepository(session_factory)
+    organization_audit = lambda action, entity, entity_id: (
+        identity_repository.log(
+            action,
+            entity,
+            organization_id=int(entity_id),
+            user_id=user_id,
+            entity_id=entity_id,
+        )
+        if user_id is not None
+        else None
+    )
+    organization_repository = OrganizationRepository(
+        session_factory, organization_audit
+    )
     organization_context = OrganizationContext.resolve(
         organization_repository, organization_id
     )
     selected_id = organization_context.organization_id
+    audit = lambda action, entity, entity_id: (
+        identity_repository.log(
+            action,
+            entity,
+            organization_id=selected_id,
+            user_id=user_id,
+            entity_id=entity_id,
+        )
+        if user_id is not None
+        else None
+    )
+
+    def require(minimum: OrganizationRole) -> None:
+        if (
+            organization_role is not None
+            and ROLE_LEVEL[organization_role] < ROLE_LEVEL[minimum]
+        ):
+            raise AuthorizationError(f"{minimum.value} access or higher is required.")
+
+    company_authorize = lambda: require(OrganizationRole.MANAGER)
+    intelligence_authorize = lambda: require(OrganizationRole.ANALYST)
     company_repository = CompanyRepository(session_factory, selected_id)
     client = WebsiteClient(
         connect_timeout=resolved_settings.discovery_connect_timeout,
@@ -72,6 +119,8 @@ def bootstrap(
             max_pages=resolved_settings.discovery_max_pages,
             slow_ms=resolved_settings.discovery_slow_response_ms,
         ),
+        audit,
+        intelligence_authorize,
     )
     try:
         ai_provider = create_ai_provider(resolved_settings)
@@ -84,15 +133,43 @@ def bootstrap(
         health_check=HealthCheckService(engine, resolved_settings.environment),
         organization_context=organization_context,
         organizations=organization_repository,
-        companies=CompanyService(company_repository),
+        companies=CompanyService(company_repository, audit, company_authorize),
         discovery=discovery_service,
         discovery_ai=DiscoveryAIService(
             AIAnalysisRepository(session_factory, selected_id),
-            CompanyService(company_repository),
+            CompanyService(company_repository, audit, company_authorize),
             discovery_service,
             ai_provider,
             resolved_settings,
             organization_repository,
             selected_id,
+            intelligence_authorize,
         ),
+        identities=identity_repository,
     )
+
+
+def bootstrap_auth(settings: Settings | None = None) -> AuthenticationService:
+    resolved_settings = settings or get_settings()
+    if not resolved_settings.auth_enabled:
+        raise RuntimeError("Authentication is not configured.")
+    engine = create_database_engine(resolved_settings.database_url)
+    session_factory = create_session_factory(engine)
+    provider = SupabaseAuthProvider(
+        resolved_settings.supabase_url or "",
+        resolved_settings.supabase_anon_key or "",
+        service_role_key=resolved_settings.supabase_service_role_key,
+    )
+    return AuthenticationService(provider, IdentityRepository(session_factory))
+
+
+def list_active_organizations(
+    settings: Settings | None = None,
+) -> list[OrganizationSummary]:
+    resolved_settings = settings or get_settings()
+    engine = create_database_engine(resolved_settings.database_url)
+    try:
+        repository = OrganizationRepository(create_session_factory(engine))
+        return repository.list_active()
+    finally:
+        engine.dispose()
