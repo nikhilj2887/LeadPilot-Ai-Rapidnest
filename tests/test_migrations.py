@@ -49,3 +49,16 @@ def test_fresh_migrations_create_exact_company_schema_and_indexes(
         "companies"
         not in inspect(create_engine(f"sqlite:///{database}")).get_table_names()
     )
+
+
+def test_alembic_accepts_url_encoded_postgresql_password() -> None:
+    database_url = (
+        "postgresql+psycopg://postgres:password%40with%25encoding"
+        "@db.example.test:5432/postgres"
+    )
+    config = Config("alembic.ini")
+    config.set_main_option("sqlalchemy.url", database_url.replace("%", "%%"))
+
+    assert config.get_main_option("sqlalchemy.url") == database_url
+    migration_environment = Path("migrations/env.py").read_text()
+    assert 'database_url.replace("%", "%%")' in migration_environment
