@@ -13,6 +13,11 @@ APPLICATION_TABLES = (
     "companies",
     "discovery_scans",
     "discovery_ai_analyses",
+    "proposals",
+    "proposal_items",
+    "proposal_sections",
+    "proposal_versions",
+    "proposal_activities",
     "audit_logs",
 )
 
