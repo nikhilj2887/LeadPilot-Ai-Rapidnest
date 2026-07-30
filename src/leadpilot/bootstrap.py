@@ -5,6 +5,13 @@ from dataclasses import dataclass
 from sqlalchemy import Engine
 from sqlalchemy.orm import Session, sessionmaker
 
+from leadpilot.application.ai_foundation import (
+    AIOrchestrationService,
+    AIProviderName,
+)
+from leadpilot.application.ai_foundation import (
+    FakeAIProvider as FoundationFakeAIProvider,
+)
 from leadpilot.application.ai_provider import AIProviderError, DisabledAIProvider
 from leadpilot.application.auth import (
     ROLE_LEVEL,
@@ -17,6 +24,7 @@ from leadpilot.application.discovery import DiscoveryService
 from leadpilot.application.discovery_ai import DiscoveryAIService
 from leadpilot.application.health import HealthCheckService
 from leadpilot.application.organizations import OrganizationContext, OrganizationSummary
+from leadpilot.application.prompt_templates import PromptTemplateService
 from leadpilot.application.proposals import ProposalService
 from leadpilot.application.service_catalog import ServiceCatalogService
 from leadpilot.config import Settings, get_settings
@@ -24,12 +32,18 @@ from leadpilot.infrastructure.ai_providers import create_ai_provider
 from leadpilot.infrastructure.database.ai_analysis_repository import (
     AIAnalysisRepository,
 )
+from leadpilot.infrastructure.database.ai_foundation_repository import (
+    AIFoundationRepository,
+)
 from leadpilot.infrastructure.database.company_repository import CompanyRepository
 from leadpilot.infrastructure.database.discovery_repository import DiscoveryRepository
 from leadpilot.infrastructure.database.engine import create_database_engine
 from leadpilot.infrastructure.database.identity_repository import IdentityRepository
 from leadpilot.infrastructure.database.organization_repository import (
     OrganizationRepository,
+)
+from leadpilot.infrastructure.database.prompt_template_repository import (
+    SqlAlchemyPromptTemplateRepository,
 )
 from leadpilot.infrastructure.database.proposal_repository import (
     SqlAlchemyProposalRepository,
@@ -40,6 +54,7 @@ from leadpilot.infrastructure.database.service_catalog_repository import (
 from leadpilot.infrastructure.database.session import create_session_factory
 from leadpilot.infrastructure.discovery_client import WebsiteClient
 from leadpilot.infrastructure.discovery_scanner import WebsiteScanner
+from leadpilot.infrastructure.gemini_provider import GeminiAIProvider
 from leadpilot.infrastructure.supabase_auth import SupabaseAuthProvider
 from leadpilot.logging import configure_logging
 
@@ -57,6 +72,9 @@ class Container:
     proposals: ProposalService
     discovery: DiscoveryService
     discovery_ai: DiscoveryAIService
+    ai_orchestration: AIOrchestrationService
+    ai_foundation_repository: AIFoundationRepository
+    prompt_templates: PromptTemplateService
     identities: IdentityRepository
 
     def dispose(self) -> None:
@@ -136,6 +154,7 @@ def bootstrap(
         ai_provider = create_ai_provider(resolved_settings)
     except AIProviderError:
         ai_provider = DisabledAIProvider()
+    ai_foundation_repository = AIFoundationRepository(session_factory, selected_id)
     return Container(
         settings=resolved_settings,
         engine=engine,
@@ -165,6 +184,18 @@ def bootstrap(
             organization_repository,
             selected_id,
             intelligence_authorize,
+        ),
+        ai_orchestration=AIOrchestrationService(
+            ai_foundation_repository,
+            {
+                AIProviderName.GEMINI: GeminiAIProvider(),
+                AIProviderName.FAKE: FoundationFakeAIProvider(),
+            },
+            audit=audit,
+        ),
+        ai_foundation_repository=ai_foundation_repository,
+        prompt_templates=PromptTemplateService(
+            SqlAlchemyPromptTemplateRepository(session_factory, selected_id)
         ),
         identities=identity_repository,
     )

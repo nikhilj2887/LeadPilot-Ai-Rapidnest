@@ -5,6 +5,7 @@ from __future__ import annotations
 import streamlit as st
 from pydantic import ValidationError
 
+from leadpilot.application.ai_foundation import AIConfigurationError
 from leadpilot.application.organizations import OrganizationUpdate
 from leadpilot.bootstrap import Container
 from leadpilot.presentation.streamlit.components import (
@@ -146,3 +147,47 @@ def render(container: Container) -> None:
         )
     else:
         st.success("All configured application services are operating normally.")
+
+    section_header(
+        "AI Settings",
+        "Provider configuration and safe availability status for this organization.",
+    )
+    try:
+        ai_config = container.ai_orchestration.resolve_provider_configuration()
+    except AIConfigurationError:
+        st.warning(
+            "AI status: Not configured. Add the required provider secret to the "
+            "deployment environment; all non-AI features remain available."
+        )
+    else:
+        ai_columns = st.columns(4)
+        ai_columns[0].metric("AI status", "Configured")
+        ai_columns[1].metric("Provider", ai_config.provider.value.title())
+        ai_columns[2].metric("Model", ai_config.model_name)
+        ai_columns[3].metric("Source", ai_config.source)
+        st.caption(
+            f"Temperature {ai_config.temperature} · "
+            f"Max output {ai_config.max_output_tokens:,} tokens · "
+            f"Timeout {ai_config.timeout_seconds}s · "
+            f"Retry limit {ai_config.max_retries}"
+        )
+        st.text_input(
+            "Credentials reference",
+            ai_config.credentials_reference or "Provider default",
+            disabled=True,
+            help="This is a secret reference name, never the secret value.",
+        )
+
+    section_header(
+        "Prompt Templates",
+        "Versioned platform templates and tenant overrides are managed here.",
+    )
+    st.info(
+        "Foundation template storage is available. Final proposal-generation "
+        "templates are intentionally deferred."
+    )
+    section_header(
+        "AI Run History",
+        "Sanitized execution metadata, token usage, cost, and failures.",
+    )
+    st.info("No AI foundation runs have been recorded for this organization yet.")

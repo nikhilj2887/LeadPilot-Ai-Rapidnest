@@ -95,3 +95,22 @@ def test_proposal_migration_creates_tenant_aware_schema(
         foreign_key["referred_table"]
         for foreign_key in inspector.get_foreign_keys("proposal_items")
     } >= {"proposals", "organizations", "organization_services"}
+
+
+def test_ai_foundation_migration_creates_expected_schema(
+    tmp_path: Path, monkeypatch
+) -> None:
+    database = tmp_path / "ai-foundation.db"
+    monkeypatch.setenv("LEADPILOT_DATABASE_URL", f"sqlite:///{database}")
+    config = Config("alembic.ini")
+    command.upgrade(config, "head")
+    inspector = inspect(create_engine(f"sqlite:///{database}"))
+    assert {"ai_provider_configs", "prompt_templates", "ai_runs"} <= set(
+        inspector.get_table_names()
+    )
+    assert {"uq_ai_runs_org_idempotency"} <= {
+        item["name"] for item in inspector.get_unique_constraints("ai_runs")
+    }
+    assert {"uq_prompt_templates_org_key_version"} <= {
+        item["name"] for item in inspector.get_unique_constraints("prompt_templates")
+    }

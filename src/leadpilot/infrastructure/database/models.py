@@ -504,3 +504,114 @@ class ProposalActivityModel(Base):
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), index=True
     )
+
+
+class AIProviderConfigModel(Base):
+    __tablename__ = "ai_provider_configs"
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    organization_id: Mapped[int | None] = mapped_column(
+        ForeignKey("organizations.id", ondelete="CASCADE"), index=True
+    )
+    provider: Mapped[str] = mapped_column(String(30), index=True)
+    model_name: Mapped[str] = mapped_column(String(200))
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True, index=True)
+    is_default: Mapped[bool] = mapped_column(Boolean, default=False, index=True)
+    temperature: Mapped[Decimal] = mapped_column(Numeric(4, 3), default=Decimal("0.1"))
+    max_output_tokens: Mapped[int] = mapped_column(Integer, default=2048)
+    request_timeout_seconds: Mapped[int] = mapped_column(Integer, default=60)
+    max_retries: Mapped[int] = mapped_column(Integer, default=2)
+    monthly_token_limit: Mapped[int | None] = mapped_column(Integer)
+    monthly_cost_limit: Mapped[Decimal | None] = mapped_column(Numeric(14, 4))
+    credentials_reference: Mapped[str | None] = mapped_column(String(200))
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+
+
+class PromptTemplateModel(Base):
+    __tablename__ = "prompt_templates"
+    __table_args__ = (
+        UniqueConstraint(
+            "organization_id",
+            "template_key",
+            "version",
+            name="uq_prompt_templates_org_key_version",
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    organization_id: Mapped[int | None] = mapped_column(
+        ForeignKey("organizations.id", ondelete="CASCADE"), index=True
+    )
+    template_key: Mapped[str] = mapped_column(String(100), index=True)
+    version: Mapped[int] = mapped_column(Integer)
+    name: Mapped[str] = mapped_column(String(200))
+    description: Mapped[str | None] = mapped_column(Text)
+    system_template: Mapped[str] = mapped_column(Text)
+    user_template: Mapped[str] = mapped_column(Text)
+    response_schema_version: Mapped[str] = mapped_column(String(50))
+    is_active: Mapped[bool] = mapped_column(Boolean, default=False, index=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+
+
+class AIRunModel(Base):
+    __tablename__ = "ai_runs"
+    __table_args__ = (
+        UniqueConstraint(
+            "organization_id",
+            "idempotency_key",
+            name="uq_ai_runs_org_idempotency",
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    organization_id: Mapped[int] = mapped_column(
+        ForeignKey("organizations.id", ondelete="RESTRICT"), index=True
+    )
+    user_id: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL")
+    )
+    proposal_id: Mapped[int | None] = mapped_column(
+        ForeignKey("proposals.id", ondelete="SET NULL"), index=True
+    )
+    company_id: Mapped[int | None] = mapped_column(
+        ForeignKey("companies.id", ondelete="SET NULL"), index=True
+    )
+    discovery_scan_id: Mapped[int | None] = mapped_column(
+        ForeignKey("discovery_scans.id", ondelete="SET NULL")
+    )
+    run_type: Mapped[str] = mapped_column(String(40), index=True)
+    provider: Mapped[str] = mapped_column(String(30), index=True)
+    model_name: Mapped[str] = mapped_column(String(200))
+    status: Mapped[str] = mapped_column(String(30), index=True)
+    prompt_template_key: Mapped[str | None] = mapped_column(String(100))
+    prompt_template_version: Mapped[int | None] = mapped_column(Integer)
+    idempotency_key: Mapped[str | None] = mapped_column(String(200))
+    input_hash: Mapped[str] = mapped_column(String(64))
+    input_snapshot_json: Mapped[str] = mapped_column(Text)
+    output_json: Mapped[str | None] = mapped_column(Text)
+    raw_output_reference: Mapped[str | None] = mapped_column(String(500))
+    error_code: Mapped[str | None] = mapped_column(String(100))
+    error_message: Mapped[str | None] = mapped_column(String(500))
+    input_tokens: Mapped[int | None] = mapped_column(Integer)
+    output_tokens: Mapped[int | None] = mapped_column(Integer)
+    total_tokens: Mapped[int | None] = mapped_column(Integer)
+    estimated_cost: Mapped[Decimal | None] = mapped_column(Numeric(14, 6))
+    provider_request_id: Mapped[str | None] = mapped_column(String(200))
+    finish_reason: Mapped[str | None] = mapped_column(String(100))
+    retry_count: Mapped[int] = mapped_column(Integer, default=0)
+    started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    duration_ms: Mapped[int | None] = mapped_column(Integer)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), index=True
+    )

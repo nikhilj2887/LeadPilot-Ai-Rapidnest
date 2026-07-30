@@ -1,5 +1,27 @@
 # LeadPilot AI
 
+## Provider-agnostic AI foundation
+
+New AI features call the application orchestration service through a generic
+structured-generation provider protocol. Gemini is the first production adapter;
+tests use the deterministic `FakeAIProvider` and never require network access.
+
+For local Gemini use, set `LEADPILOT_AI_PROVIDER=GEMINI`,
+`LEADPILOT_AI_MODEL` to a supported model, and `GEMINI_API_KEY` in the runtime
+environment. Optional controls include `LEADPILOT_AI_MAX_OUTPUT_TOKENS` and
+`LEADPILOT_AI_TIMEOUT_SECONDS`. Raw keys are never stored in the database:
+configuration records hold only the environment-variable or secret reference name.
+
+Tenant-active configuration takes precedence over a platform-active default, which
+in turn takes precedence over environment configuration. AI runs store sanitized
+metadata, hashes, status, usage, cost, and safe errors. Prompt versions are
+append-only and tenant overrides take precedence over platform templates. Future
+providers implement the same protocol and are registered in bootstrap without
+exposing provider SDK types to application features.
+
+Offering recommendations, proposal generation, regeneration, PDF/email delivery,
+billing, public links, and e-signatures remain intentionally deferred.
+
 ![Python 3.12+](https://img.shields.io/badge/Python-3.12%2B-3776AB?logo=python&logoColor=white)
 ![Streamlit](https://img.shields.io/badge/Streamlit-1.x-FF4B4B?logo=streamlit&logoColor=white)
 ![SQLAlchemy 2](https://img.shields.io/badge/SQLAlchemy-2.x-D71F00)
