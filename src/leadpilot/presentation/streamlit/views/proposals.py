@@ -8,7 +8,9 @@ from decimal import Decimal
 import streamlit as st
 from pydantic import ValidationError
 
+from leadpilot.application.ai_foundation import AIConfigurationError, AIError
 from leadpilot.application.auth import AuthorizationError
+from leadpilot.application.offering_recommendations import RecommendationError
 from leadpilot.application.proposals import (
     TRANSITIONS,
     ProposalFilters,
@@ -146,8 +148,14 @@ def _detail(container: Container, proposal_id: int) -> None:
         f"{proposal.proposal_number} · {proposal.company_name} · "
         f"{proposal.status.value.replace('_', ' ').title()}"
     )
-    summary, items, sections, history = st.tabs(
-        ("Summary", "Offerings & pricing", "Sections", "Versions & activity")
+    summary, items, recommendations, sections, history = st.tabs(
+        (
+            "Summary",
+            "Offerings & pricing",
+            "AI Recommendations",
+            "Sections",
+            "Versions & activity",
+        )
     )
     with summary:
         st.write(proposal.summary or "No executive summary yet.")
@@ -344,6 +352,9 @@ def _detail(container: Container, proposal_id: int) -> None:
                         "Section saved.",
                     )
 
+    with recommendations:
+        _recommendations(container, proposal_id, proposal.company_id)
+
     with history:
         change_summary = st.text_input(
             "Version note", max_chars=500, key=f"version_note_{proposal_id}"
@@ -372,6 +383,8 @@ def _mutate(operation: object, message: str) -> None:
         operation()  # type: ignore[operator]
     except (
         AuthorizationError,
+        AIError,
+        RecommendationError,
         ProposalValidationError,
         ValidationError,
     ) as exc:
@@ -379,3 +392,99 @@ def _mutate(operation: object, message: str) -> None:
         return
     st.session_state.proposal_flash = message
     st.rerun()
+
+
+def _recommendations(container: Container, proposal_id: int, company_id: int) -> None:
+    service = container.offering_recommendations
+    st.subheader("Opportunity Context")
+    company = container.companies.get_company(company_id)
+    scan = container.discovery.latest_for_company(company_id)
+    st.caption(
+        f"{company.name} · {company.industry or 'Industry unconfirmed'} · "
+        f"{company.website or 'No website'} · "
+        f"Discovery: {scan.status if scan else 'Unavailable'}"
+    )
+    try:
+        config = container.ai_orchestration.resolve_provider_configuration()
+    except AIConfigurationError:
+        config = None
+        st.warning("AI is not configured. Existing recommendations remain available.")
+    controls = st.columns(4)
+    candidate_limit = int(controls[0].number_input("Candidate limit", 1, 30, 15))
+    threshold = int(controls[1].number_input("Minimum score", 0, 100, 20))
+    if controls[2].button("Generate Recommendations", disabled=config is None):
+        _mutate(
+            lambda: service.generate_recommendations(
+                proposal_id,
+                company_id,
+                candidate_limit=candidate_limit,
+                minimum_candidate_score=threshold,
+            ),
+            "Recommendations generated for human review.",
+        )
+    if controls[3].button("Regenerate Recommendations", disabled=config is None):
+        _mutate(
+            lambda: service.generate_recommendations(
+                proposal_id,
+                company_id,
+                candidate_limit=candidate_limit,
+                minimum_candidate_score=threshold,
+                force_regenerate=True,
+            ),
+            "Prior pending recommendations superseded.",
+        )
+    records = service.list_recommendations(proposal_id)
+    st.subheader("Recommended Offerings")
+    if not records:
+        st.info("No recommendation history exists for this proposal.")
+    for record in records:
+        confidence = (
+            "High"
+            if record.match_score >= 80
+            else "Medium"
+            if record.match_score >= 60
+            else "Low"
+        )
+        with st.expander(
+            f"Catalog #{record.service_catalog_id} · {record.match_score}% "
+            f"{confidence} · {record.status.value.replace('_', ' ').title()}"
+        ):
+            st.write(record.recommendation_reason)
+            st.caption(
+                f"Priority {record.priority.value} · Deterministic score "
+                f"{record.deterministic_score} · {record.suggested_scope}"
+            )
+            actions = st.columns(3)
+            if actions[0].button(
+                "Approve",
+                key=f"approve_rec_{record.id}",
+                disabled=record.status.value != "PENDING_REVIEW",
+            ):
+                _mutate(
+                    lambda r=record: service.approve_recommendation(r.id),
+                    "Recommendation approved.",
+                )
+            if actions[1].button(
+                "Reject",
+                key=f"reject_rec_{record.id}",
+                disabled=record.status.value != "PENDING_REVIEW",
+            ):
+                _mutate(
+                    lambda r=record: service.reject_recommendation(r.id),
+                    "Recommendation rejected.",
+                )
+            if actions[2].button(
+                "Add to Proposal",
+                key=f"add_rec_{record.id}",
+                disabled=record.status.value != "APPROVED",
+            ):
+                _mutate(
+                    lambda r=record: service.add_recommendation_to_proposal(r.id),
+                    "Approved offering added with catalog pricing.",
+                )
+    st.subheader("Unmatched Opportunities")
+    st.caption(
+        "Unmatched opportunities are informational and never create catalog items."
+    )
+    st.subheader("Recommendation History")
+    st.caption(f"{len(records)} persisted recommendation records.")

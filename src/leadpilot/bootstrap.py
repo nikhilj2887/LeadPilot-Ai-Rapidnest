@@ -23,6 +23,7 @@ from leadpilot.application.companies import CompanyService
 from leadpilot.application.discovery import DiscoveryService
 from leadpilot.application.discovery_ai import DiscoveryAIService
 from leadpilot.application.health import HealthCheckService
+from leadpilot.application.offering_recommendations import OfferingRecommendationService
 from leadpilot.application.organizations import OrganizationContext, OrganizationSummary
 from leadpilot.application.prompt_templates import PromptTemplateService
 from leadpilot.application.proposals import ProposalService
@@ -39,6 +40,9 @@ from leadpilot.infrastructure.database.company_repository import CompanyReposito
 from leadpilot.infrastructure.database.discovery_repository import DiscoveryRepository
 from leadpilot.infrastructure.database.engine import create_database_engine
 from leadpilot.infrastructure.database.identity_repository import IdentityRepository
+from leadpilot.infrastructure.database.offering_recommendation_repository import (
+    OfferingRecommendationRepository,
+)
 from leadpilot.infrastructure.database.organization_repository import (
     OrganizationRepository,
 )
@@ -75,6 +79,7 @@ class Container:
     ai_orchestration: AIOrchestrationService
     ai_foundation_repository: AIFoundationRepository
     prompt_templates: PromptTemplateService
+    offering_recommendations: OfferingRecommendationService
     identities: IdentityRepository
 
     def dispose(self) -> None:
@@ -155,6 +160,26 @@ def bootstrap(
     except AIProviderError:
         ai_provider = DisabledAIProvider()
     ai_foundation_repository = AIFoundationRepository(session_factory, selected_id)
+    proposal_service = ProposalService(
+        SqlAlchemyProposalRepository(session_factory, selected_id),
+        user_id=user_id,
+        authorize_write=company_authorize,
+        audit=audit,
+    )
+    catalog_service = ServiceCatalogService(
+        ServiceCatalogRepository(session_factory, selected_id),
+        authorize_write=company_authorize,
+        audit=audit,
+    )
+    ai_orchestration = AIOrchestrationService(
+        ai_foundation_repository,
+        {
+            AIProviderName.GEMINI: GeminiAIProvider(),
+            AIProviderName.FAKE: FoundationFakeAIProvider(),
+        },
+        audit=audit,
+    )
+    company_service = CompanyService(company_repository, audit, company_authorize)
     return Container(
         settings=resolved_settings,
         engine=engine,
@@ -162,18 +187,9 @@ def bootstrap(
         health_check=HealthCheckService(engine, resolved_settings.environment),
         organization_context=organization_context,
         organizations=organization_repository,
-        companies=CompanyService(company_repository, audit, company_authorize),
-        service_catalog=ServiceCatalogService(
-            ServiceCatalogRepository(session_factory, selected_id),
-            authorize_write=company_authorize,
-            audit=audit,
-        ),
-        proposals=ProposalService(
-            SqlAlchemyProposalRepository(session_factory, selected_id),
-            user_id=user_id,
-            authorize_write=company_authorize,
-            audit=audit,
-        ),
+        companies=company_service,
+        service_catalog=catalog_service,
+        proposals=proposal_service,
         discovery=discovery_service,
         discovery_ai=DiscoveryAIService(
             AIAnalysisRepository(session_factory, selected_id),
@@ -185,17 +201,22 @@ def bootstrap(
             selected_id,
             intelligence_authorize,
         ),
-        ai_orchestration=AIOrchestrationService(
-            ai_foundation_repository,
-            {
-                AIProviderName.GEMINI: GeminiAIProvider(),
-                AIProviderName.FAKE: FoundationFakeAIProvider(),
-            },
-            audit=audit,
-        ),
+        ai_orchestration=ai_orchestration,
         ai_foundation_repository=ai_foundation_repository,
         prompt_templates=PromptTemplateService(
             SqlAlchemyPromptTemplateRepository(session_factory, selected_id)
+        ),
+        offering_recommendations=OfferingRecommendationService(
+            OfferingRecommendationRepository(session_factory, selected_id),
+            ai_orchestration,
+            proposal_service,
+            company_service,
+            discovery_service,
+            catalog_service,
+            selected_id,
+            user_id,
+            intelligence_authorize,
+            audit,
         ),
         identities=identity_repository,
     )

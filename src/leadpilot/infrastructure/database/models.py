@@ -615,3 +615,47 @@ class AIRunModel(Base):
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), index=True
     )
+
+
+class ProposalRecommendationModel(Base):
+    __tablename__ = "proposal_recommendations"
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    organization_id: Mapped[int] = mapped_column(
+        ForeignKey("organizations.id", ondelete="RESTRICT"), index=True
+    )
+    proposal_id: Mapped[int] = mapped_column(
+        ForeignKey("proposals.id", ondelete="CASCADE"), index=True
+    )
+    company_id: Mapped[int] = mapped_column(
+        ForeignKey("companies.id", ondelete="RESTRICT"), index=True
+    )
+    service_catalog_id: Mapped[int] = mapped_column(
+        ForeignKey("organization_services.id", ondelete="RESTRICT"), index=True
+    )
+    ai_run_id: Mapped[int] = mapped_column(
+        ForeignKey("ai_runs.id", ondelete="RESTRICT"), index=True
+    )
+    status: Mapped[str] = mapped_column(String(30), index=True)
+    match_score: Mapped[int] = mapped_column(Integer)
+    deterministic_score: Mapped[int | None] = mapped_column(Integer)
+    priority: Mapped[str] = mapped_column(String(10), index=True)
+    recommendation_reason: Mapped[str] = mapped_column(Text)
+    matched_findings_json: Mapped[str] = mapped_column(Text, default="[]")
+    expected_benefits_json: Mapped[str] = mapped_column(Text, default="[]")
+    suggested_scope: Mapped[str] = mapped_column(Text)
+    suggested_timeline: Mapped[str | None] = mapped_column(String(200))
+    warnings_json: Mapped[str] = mapped_column(Text, default="[]")
+    reviewed_by_user_id: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL")
+    )
+    reviewed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    added_proposal_item_id: Mapped[int | None] = mapped_column(
+        ForeignKey("proposal_items.id", ondelete="SET NULL")
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), index=True
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )

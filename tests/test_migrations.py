@@ -114,3 +114,18 @@ def test_ai_foundation_migration_creates_expected_schema(
     assert {"uq_prompt_templates_org_key_version"} <= {
         item["name"] for item in inspector.get_unique_constraints("prompt_templates")
     }
+
+
+def test_offering_recommendation_migration(tmp_path: Path, monkeypatch) -> None:
+    database = tmp_path / "recommendations.db"
+    monkeypatch.setenv("LEADPILOT_DATABASE_URL", f"sqlite:///{database}")
+    command.upgrade(Config("alembic.ini"), "head")
+    inspector = inspect(create_engine(f"sqlite:///{database}"))
+    assert "proposal_recommendations" in inspector.get_table_names()
+    assert {
+        "ck_recommendation_match_score",
+        "ck_recommendation_deterministic_score",
+    } <= {
+        item["name"]
+        for item in inspector.get_check_constraints("proposal_recommendations")
+    }
