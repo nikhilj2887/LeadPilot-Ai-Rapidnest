@@ -41,6 +41,26 @@ catalog-to-proposal-item service so current catalog pricing, currency validation
 totals, proposal activity, and lifecycle protections remain authoritative.
 Proposal section generation and other document-delivery features remain deferred.
 
+## AI proposal writer
+
+The proposal writer builds a bounded tenant context from the proposal, company,
+completed discovery evidence, approved recommendations, proposal items, and seller
+profile. It generates only selected narrative sections. Pricing, quantities,
+discounts, taxes, totals, currencies, validity, legal commitments, and proposal
+items remain deterministic and outside the AI response schema.
+
+Generated content is persisted as a review draft before it can affect a proposal.
+The preview compares current and generated content and shows source references and
+warnings. Applying selected sections creates an immutable proposal version first.
+Manual or previously edited AI content requires explicit overwrite confirmation;
+rejected drafts remain in history and change nothing.
+
+Website evidence is sanitized, size-limited, and labelled as untrusted data.
+Returned section keys and source references are allow-listed, commercial fields
+and unsupported guarantees are rejected, and generated markup is stripped before
+persistence. PDF export, email delivery, public links, and e-signatures remain
+deferred.
+
 ![Python 3.12+](https://img.shields.io/badge/Python-3.12%2B-3776AB?logo=python&logoColor=white)
 ![Streamlit](https://img.shields.io/badge/Streamlit-1.x-FF4B4B?logo=streamlit&logoColor=white)
 ![SQLAlchemy 2](https://img.shields.io/badge/SQLAlchemy-2.x-D71F00)

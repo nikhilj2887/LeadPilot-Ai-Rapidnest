@@ -364,6 +364,12 @@ class SqlAlchemyProposalRepository:
                 return None
             for key, value in values.model_dump().items():
                 setattr(model, key, value)
+            model.manually_edited = True
+            model.content_source = (
+                "AI_GENERATED_THEN_EDITED"
+                if model.content_source == "AI_GENERATED"
+                else "MANUAL"
+            )
             session.flush()
             session.refresh(model)
             return self._section(model)
@@ -643,6 +649,10 @@ class SqlAlchemyProposalRepository:
             content=model.content,
             is_enabled=model.is_enabled,
             display_order=model.display_order,
+            content_source=model.content_source,
+            last_ai_run_id=model.last_ai_run_id,
+            manually_edited=model.manually_edited,
+            generated_at=model.generated_at,
         )
 
     @staticmethod

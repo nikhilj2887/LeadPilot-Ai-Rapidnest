@@ -129,3 +129,20 @@ def test_offering_recommendation_migration(tmp_path: Path, monkeypatch) -> None:
         item["name"]
         for item in inspector.get_check_constraints("proposal_recommendations")
     }
+
+
+def test_proposal_generation_migration(tmp_path: Path, monkeypatch) -> None:
+    database = tmp_path / "proposal-generation.db"
+    monkeypatch.setenv("LEADPILOT_DATABASE_URL", f"sqlite:///{database}")
+    command.upgrade(Config("alembic.ini"), "head")
+    inspector = inspect(create_engine(f"sqlite:///{database}"))
+    assert "proposal_generation_drafts" in inspector.get_table_names()
+    section_columns = {
+        column["name"] for column in inspector.get_columns("proposal_sections")
+    }
+    assert {
+        "content_source",
+        "last_ai_run_id",
+        "manually_edited",
+        "generated_at",
+    } <= section_columns

@@ -11,6 +11,12 @@ from pydantic import ValidationError
 from leadpilot.application.ai_foundation import AIConfigurationError, AIError
 from leadpilot.application.auth import AuthorizationError
 from leadpilot.application.offering_recommendations import RecommendationError
+from leadpilot.application.proposal_generation import (
+    SUPPORTED_SECTION_KEYS,
+    ProposalGenerationError,
+    ProposalGenerationStatus,
+    ProposalTone,
+)
 from leadpilot.application.proposals import (
     TRANSITIONS,
     ProposalFilters,
@@ -148,11 +154,12 @@ def _detail(container: Container, proposal_id: int) -> None:
         f"{proposal.proposal_number} · {proposal.company_name} · "
         f"{proposal.status.value.replace('_', ' ').title()}"
     )
-    summary, items, recommendations, sections, history = st.tabs(
+    summary, items, recommendations, writer, sections, history = st.tabs(
         (
             "Summary",
             "Offerings & pricing",
             "AI Recommendations",
+            "AI Proposal Writer",
             "Sections",
             "Versions & activity",
         )
@@ -355,6 +362,9 @@ def _detail(container: Container, proposal_id: int) -> None:
     with recommendations:
         _recommendations(container, proposal_id, proposal.company_id)
 
+    with writer:
+        _proposal_writer(container, proposal_id)
+
     with history:
         change_summary = st.text_input(
             "Version note", max_chars=500, key=f"version_note_{proposal_id}"
@@ -385,6 +395,7 @@ def _mutate(operation: object, message: str) -> None:
         AuthorizationError,
         AIError,
         RecommendationError,
+        ProposalGenerationError,
         ProposalValidationError,
         ValidationError,
     ) as exc:
@@ -488,3 +499,143 @@ def _recommendations(container: Container, proposal_id: int, company_id: int) ->
     )
     st.subheader("Recommendation History")
     st.caption(f"{len(records)} persisted recommendation records.")
+
+
+def _proposal_writer(container: Container, proposal_id: int) -> None:
+    service = container.proposal_generation
+    proposal = container.proposals.get_proposal(proposal_id)
+    sections = {
+        section.section_key: section
+        for section in container.proposals.list_sections(proposal_id)
+        if section.section_key in SUPPORTED_SECTION_KEYS
+    }
+    st.subheader("Generation Context")
+    recommendations = container.offering_recommendations.list_recommendations(
+        proposal_id
+    )
+    approved = sum(
+        record.status.value in {"APPROVED", "ADDED_TO_PROPOSAL"}
+        for record in recommendations
+    )
+    manual = sum(section.manually_edited for section in sections.values())
+    st.caption(
+        f"{proposal.proposal_number} · {proposal.company_name} · "
+        f"{proposal.status.value.replace('_', ' ').title()} · "
+        f"{approved} approved recommendations · "
+        f"{len(container.proposals.list_items(proposal_id))} proposal items · "
+        f"{manual} manually edited sections"
+    )
+    try:
+        config = container.ai_orchestration.resolve_provider_configuration()
+    except AIConfigurationError:
+        config = None
+        st.warning("AI is not configured. Generation history remains available.")
+    selected = st.multiselect(
+        "Select narrative sections",
+        tuple(sections),
+        default=("EXECUTIVE_SUMMARY",) if "EXECUTIVE_SUMMARY" in sections else (),
+        format_func=lambda key: sections[key].title,
+    )
+    tone = st.selectbox(
+        "Tone",
+        tuple(ProposalTone),
+        format_func=lambda value: value.value.title(),
+    )
+    instructions = st.text_area(
+        "Optional instructions",
+        max_chars=1500,
+        help="Instructions cannot change prices, legal terms, or catalog offerings.",
+    )
+    controls = st.columns(3)
+    if controls[0].button("Generate Draft", disabled=config is None or not selected):
+        _mutate(
+            lambda: service.generate_proposal_draft(
+                proposal_id,
+                section_keys=tuple(selected),
+                tone=tone,
+                instructions=instructions or None,
+            ),
+            "Draft generated for preview.",
+        )
+    if controls[1].button(
+        "Regenerate Selected Sections", disabled=config is None or not selected
+    ):
+        _mutate(
+            lambda: service.generate_proposal_draft(
+                proposal_id,
+                section_keys=tuple(selected),
+                tone=tone,
+                instructions=instructions or None,
+                force_regenerate=True,
+            ),
+            "Selected sections regenerated.",
+        )
+    drafts = service.list_generation_drafts(proposal_id)
+    st.subheader("Draft Preview")
+    for draft in drafts:
+        with st.expander(
+            f"Draft #{draft.id} · {draft.generation_type.value.replace('_', ' ').title()} "
+            f"· {draft.status.value.replace('_', ' ').title()}"
+        ):
+            apply_keys: list[str] = []
+            manual_selected = False
+            for generated in draft.generated_sections:
+                current = sections[generated.section_key]
+                st.markdown(f"#### {generated.title}")
+                st.caption(f"Current content · Source: {current.content_source}")
+                st.text_area(
+                    "Current content",
+                    current.content,
+                    disabled=True,
+                    key=f"current_{draft.id}_{generated.section_key}",
+                )
+                st.caption("Generated preview")
+                st.text_area(
+                    "Generated content",
+                    generated.content,
+                    disabled=True,
+                    key=f"generated_{draft.id}_{generated.section_key}",
+                )
+                if current.manually_edited:
+                    st.warning("This section contains manual edits.")
+                if st.checkbox(
+                    "Apply this section",
+                    key=f"apply_{draft.id}_{generated.section_key}",
+                ):
+                    apply_keys.append(generated.section_key)
+                    manual_selected |= current.manually_edited
+            confirm = st.checkbox(
+                "Confirm overwrite of selected manual edits",
+                key=f"confirm_manual_{draft.id}",
+                disabled=not manual_selected,
+            )
+            actions = st.columns(2)
+            if actions[0].button(
+                "Apply Selected Sections",
+                key=f"apply_draft_{draft.id}",
+                disabled=(
+                    draft.status != ProposalGenerationStatus.READY_FOR_REVIEW
+                    or not apply_keys
+                ),
+            ):
+                _mutate(
+                    lambda d=draft, keys=tuple(apply_keys), confirmed=confirm: (
+                        service.apply_selected_sections(
+                            d.id,
+                            keys,
+                            confirm_manual_overwrite=confirmed,
+                        )
+                    ),
+                    "Selected narrative sections applied after versioning.",
+                )
+            if actions[1].button(
+                "Reject Draft",
+                key=f"reject_draft_{draft.id}",
+                disabled=draft.status != ProposalGenerationStatus.READY_FOR_REVIEW,
+            ):
+                _mutate(
+                    lambda d=draft: service.reject_generation_draft(d.id),
+                    "Draft rejected without changing the proposal.",
+                )
+    st.subheader("Generation History")
+    st.caption(f"{len(drafts)} generation drafts retained.")

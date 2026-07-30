@@ -160,6 +160,10 @@ class ProposalSection:
     content: str
     is_enabled: bool
     display_order: int
+    content_source: str = "EMPTY"
+    last_ai_run_id: int | None = None
+    manually_edited: bool = False
+    generated_at: datetime | None = None
 
 
 @dataclass(frozen=True, slots=True)
