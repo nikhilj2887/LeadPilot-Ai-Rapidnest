@@ -452,6 +452,12 @@ class ProposalSectionModel(Base):
     content: Mapped[str] = mapped_column(Text, default="")
     is_enabled: Mapped[bool] = mapped_column(Boolean, default=True)
     display_order: Mapped[int] = mapped_column(Integer)
+    content_source: Mapped[str] = mapped_column(String(30), default="EMPTY")
+    last_ai_run_id: Mapped[int | None] = mapped_column(
+        ForeignKey("ai_runs.id", ondelete="SET NULL")
+    )
+    manually_edited: Mapped[bool] = mapped_column(Boolean, default=False)
+    generated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )
@@ -659,3 +665,40 @@ class ProposalRecommendationModel(Base):
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
+
+
+class ProposalGenerationDraftModel(Base):
+    __tablename__ = "proposal_generation_drafts"
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    organization_id: Mapped[int] = mapped_column(
+        ForeignKey("organizations.id", ondelete="RESTRICT"), index=True
+    )
+    proposal_id: Mapped[int] = mapped_column(
+        ForeignKey("proposals.id", ondelete="CASCADE"), index=True
+    )
+    ai_run_id: Mapped[int] = mapped_column(
+        ForeignKey("ai_runs.id", ondelete="RESTRICT"), index=True
+    )
+    generation_type: Mapped[str] = mapped_column(String(30), index=True)
+    status: Mapped[str] = mapped_column(String(30), index=True)
+    tone: Mapped[str] = mapped_column(String(20))
+    instructions: Mapped[str | None] = mapped_column(Text)
+    requested_section_keys_json: Mapped[str] = mapped_column(Text)
+    generated_sections_json: Mapped[str] = mapped_column(Text)
+    source_references_json: Mapped[str | None] = mapped_column(Text)
+    warnings_json: Mapped[str | None] = mapped_column(Text)
+    applied_section_keys_json: Mapped[str | None] = mapped_column(Text)
+    input_hash: Mapped[str] = mapped_column(String(64), index=True)
+    created_by_user_id: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL")
+    )
+    applied_by_user_id: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL")
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), index=True
+    )
+    applied_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    rejected_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))

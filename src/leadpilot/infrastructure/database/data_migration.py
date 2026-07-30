@@ -22,6 +22,7 @@ APPLICATION_TABLES = (
     "prompt_templates",
     "ai_runs",
     "proposal_recommendations",
+    "proposal_generation_drafts",
     "audit_logs",
 )
 

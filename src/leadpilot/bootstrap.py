@@ -26,6 +26,8 @@ from leadpilot.application.health import HealthCheckService
 from leadpilot.application.offering_recommendations import OfferingRecommendationService
 from leadpilot.application.organizations import OrganizationContext, OrganizationSummary
 from leadpilot.application.prompt_templates import PromptTemplateService
+from leadpilot.application.proposal_context_builder import ProposalContextBuilder
+from leadpilot.application.proposal_generation import ProposalGenerationService
 from leadpilot.application.proposals import ProposalService
 from leadpilot.application.service_catalog import ServiceCatalogService
 from leadpilot.config import Settings, get_settings
@@ -48,6 +50,9 @@ from leadpilot.infrastructure.database.organization_repository import (
 )
 from leadpilot.infrastructure.database.prompt_template_repository import (
     SqlAlchemyPromptTemplateRepository,
+)
+from leadpilot.infrastructure.database.proposal_generation_repository import (
+    ProposalGenerationRepository,
 )
 from leadpilot.infrastructure.database.proposal_repository import (
     SqlAlchemyProposalRepository,
@@ -80,6 +85,7 @@ class Container:
     ai_foundation_repository: AIFoundationRepository
     prompt_templates: PromptTemplateService
     offering_recommendations: OfferingRecommendationService
+    proposal_generation: ProposalGenerationService
     identities: IdentityRepository
 
     def dispose(self) -> None:
@@ -180,6 +186,18 @@ def bootstrap(
         audit=audit,
     )
     company_service = CompanyService(company_repository, audit, company_authorize)
+    recommendation_service = OfferingRecommendationService(
+        OfferingRecommendationRepository(session_factory, selected_id),
+        ai_orchestration,
+        proposal_service,
+        company_service,
+        discovery_service,
+        catalog_service,
+        selected_id,
+        user_id,
+        intelligence_authorize,
+        audit,
+    )
     return Container(
         settings=resolved_settings,
         engine=engine,
@@ -206,13 +224,18 @@ def bootstrap(
         prompt_templates=PromptTemplateService(
             SqlAlchemyPromptTemplateRepository(session_factory, selected_id)
         ),
-        offering_recommendations=OfferingRecommendationService(
-            OfferingRecommendationRepository(session_factory, selected_id),
+        offering_recommendations=recommendation_service,
+        proposal_generation=ProposalGenerationService(
+            ProposalGenerationRepository(session_factory, selected_id),
             ai_orchestration,
+            ProposalContextBuilder(
+                proposal_service,
+                company_service,
+                discovery_service,
+                recommendation_service,
+                organization_context.organization,
+            ),
             proposal_service,
-            company_service,
-            discovery_service,
-            catalog_service,
             selected_id,
             user_id,
             intelligence_authorize,
