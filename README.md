@@ -22,6 +22,25 @@ exposing provider SDK types to application features.
 Offering recommendations, proposal generation, regeneration, PDF/email delivery,
 billing, public links, and e-signatures remain intentionally deferred.
 
+## AI offering recommendations
+
+Proposal recommendations combine sanitized discovery evidence with deterministic
+catalog scoring before AI is called. Industry, problem, tag, finding, existing
+recommendation, and readiness relevance contribute to a bounded 0–100 candidate
+score. Only the highest-scoring active offerings owned by the current tenant are
+sent for AI ranking.
+
+Provider output is untrusted: every catalog ID, score, priority, and text length is
+validated against the exact candidate set. Website markup, scripts, and common
+instruction-injection phrases are neutralized and evidence is explicitly labelled
+as untrusted data. AI cannot supply prices or currencies.
+
+Recommendations require human approval. Pending items may be approved or rejected;
+only approved items can be added to a mutable proposal. Conversion reuses the
+catalog-to-proposal-item service so current catalog pricing, currency validation,
+totals, proposal activity, and lifecycle protections remain authoritative.
+Proposal section generation and other document-delivery features remain deferred.
+
 ![Python 3.12+](https://img.shields.io/badge/Python-3.12%2B-3776AB?logo=python&logoColor=white)
 ![Streamlit](https://img.shields.io/badge/Streamlit-1.x-FF4B4B?logo=streamlit&logoColor=white)
 ![SQLAlchemy 2](https://img.shields.io/badge/SQLAlchemy-2.x-D71F00)
