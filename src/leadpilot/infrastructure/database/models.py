@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime
+from decimal import Decimal
 
 from sqlalchemy import (
     Boolean,
@@ -8,6 +9,7 @@ from sqlalchemy import (
     Float,
     ForeignKey,
     Integer,
+    Numeric,
     String,
     Text,
     UniqueConstraint,
@@ -83,7 +85,17 @@ class OrganizationServiceModel(Base):
     name: Mapped[str] = mapped_column(String(200))
     short_description: Mapped[str | None] = mapped_column(String(500))
     full_description: Mapped[str | None] = mapped_column(Text)
+    detailed_description: Mapped[str | None] = mapped_column(Text)
     category: Mapped[str | None] = mapped_column(String(120))
+    problems_solved: Mapped[str] = mapped_column(Text, default="[]")
+    business_benefits: Mapped[str] = mapped_column(Text, default="[]")
+    deliverables: Mapped[str] = mapped_column(Text, default="[]")
+    target_industries: Mapped[str] = mapped_column(Text, default="[]")
+    pricing_model: Mapped[str] = mapped_column(String(20), default="CUSTOM", index=True)
+    base_price: Mapped[Decimal | None] = mapped_column(Numeric(12, 2))
+    currency: Mapped[str] = mapped_column(String(3), default="INR")
+    estimated_timeline: Mapped[str | None] = mapped_column(String(200))
+    tags: Mapped[str] = mapped_column(Text, default="[]")
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, index=True)
     display_order: Mapped[int] = mapped_column(Integer, default=0)
     created_at: Mapped[datetime] = mapped_column(

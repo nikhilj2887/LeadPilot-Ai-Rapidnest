@@ -199,6 +199,7 @@ def test_role_authorization_and_protected_navigation(
 ) -> None:
     principal = active_principal(identity_stack, role)
     assert can_manage_organization(principal) is organization_admin
+    assert "Service Catalog" in pages_for_principal(principal)
     assert ("Team" in pages_for_principal(principal)) is organization_admin
     assert "Platform Admin" not in pages_for_principal(principal)
     if role == OrganizationRole.VIEWER:

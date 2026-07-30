@@ -13,6 +13,7 @@ from leadpilot.presentation.streamlit.views import (
     dashboard,
     discovery,
     proposals,
+    service_catalog,
     settings,
 )
 
@@ -22,6 +23,7 @@ PAGE_ICONS = {
     "Dashboard": "Home",
     "Companies": "Companies",
     "Discovery": "Discovery",
+    "Service Catalog": "Service Catalog",
     "Proposals": "Proposals",
     "Settings": "Settings",
     "Team": "Team",
@@ -32,6 +34,7 @@ PAGES: dict[str, PageRenderer] = {
     "Dashboard": dashboard.render,
     "Companies": companies.render,
     "Discovery": discovery.render,
+    "Service Catalog": service_catalog.render,
     "Proposals": proposals.render,
     "Settings": settings.render,
 }

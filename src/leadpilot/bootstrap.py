@@ -17,6 +17,7 @@ from leadpilot.application.discovery import DiscoveryService
 from leadpilot.application.discovery_ai import DiscoveryAIService
 from leadpilot.application.health import HealthCheckService
 from leadpilot.application.organizations import OrganizationContext, OrganizationSummary
+from leadpilot.application.service_catalog import ServiceCatalogService
 from leadpilot.config import Settings, get_settings
 from leadpilot.infrastructure.ai_providers import create_ai_provider
 from leadpilot.infrastructure.database.ai_analysis_repository import (
@@ -28,6 +29,9 @@ from leadpilot.infrastructure.database.engine import create_database_engine
 from leadpilot.infrastructure.database.identity_repository import IdentityRepository
 from leadpilot.infrastructure.database.organization_repository import (
     OrganizationRepository,
+)
+from leadpilot.infrastructure.database.service_catalog_repository import (
+    ServiceCatalogRepository,
 )
 from leadpilot.infrastructure.database.session import create_session_factory
 from leadpilot.infrastructure.discovery_client import WebsiteClient
@@ -45,6 +49,7 @@ class Container:
     organization_context: OrganizationContext
     organizations: OrganizationRepository
     companies: CompanyService
+    service_catalog: ServiceCatalogService
     discovery: DiscoveryService
     discovery_ai: DiscoveryAIService
     identities: IdentityRepository
@@ -134,6 +139,11 @@ def bootstrap(
         organization_context=organization_context,
         organizations=organization_repository,
         companies=CompanyService(company_repository, audit, company_authorize),
+        service_catalog=ServiceCatalogService(
+            ServiceCatalogRepository(session_factory, selected_id),
+            authorize_write=company_authorize,
+            audit=audit,
+        ),
         discovery=discovery_service,
         discovery_ai=DiscoveryAIService(
             AIAnalysisRepository(session_factory, selected_id),

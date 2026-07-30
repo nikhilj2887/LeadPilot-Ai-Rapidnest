@@ -17,7 +17,7 @@ from leadpilot.presentation.streamlit.components import (
 def render(container: Container) -> None:
     page_header(
         "Settings",
-        "Manage the selected organization profile, branding, and service catalogue.",
+        "Manage the selected organization profile and branding.",
         eyebrow="Organization",
     )
     organization = container.organization_context.organization
@@ -105,61 +105,6 @@ def render(container: Container) -> None:
         st.info(
             "No logo or branding has been configured. The organization name is used."
         )
-
-    section_header(
-        "Service Catalogue",
-        "AI Intelligence may recommend only active services listed here.",
-    )
-    services = repository.list_services(organization.id)
-    for service in services:
-        with (
-            st.expander(
-                f"{service.display_order}. {service.name}"
-                + ("" if service.is_active else " · Inactive")
-            ),
-            st.form(f"service_{service.id}"),
-        ):
-            name = st.text_input("Service name", service.name)
-            description = st.text_area(
-                "Short description", service.short_description or ""
-            )
-            category = st.text_input("Category", service.category or "")
-            active = st.checkbox("Active", service.is_active)
-            order = st.number_input(
-                "Display order", min_value=0, value=service.display_order
-            )
-            if st.form_submit_button("Update service"):
-                repository.update_service(
-                    organization.id,
-                    service.id,
-                    name=name.strip(),
-                    short_description=description.strip() or None,
-                    category=category.strip() or None,
-                    is_active=active,
-                    display_order=int(order),
-                )
-                st.success("Service updated.")
-    with st.expander("Add service"), st.form("add_service"):
-        new_name = st.text_input("Service name")
-        new_description = st.text_area("Short description")
-        new_category = st.text_input("Category")
-        new_order = st.number_input(
-            "Display order", min_value=0, value=len(services) + 1
-        )
-        if st.form_submit_button("Add service", type="primary"):
-            if not new_name.strip():
-                st.error("Service name is required.")
-            else:
-                repository.create_service(
-                    organization.id,
-                    name=new_name.strip(),
-                    short_description=new_description.strip() or None,
-                    full_description=None,
-                    category=new_category.strip() or None,
-                    is_active=True,
-                    display_order=int(new_order),
-                )
-                st.success("Service added.")
 
     section_header("Workspace Information", "Stable organization identifiers.")
     info = st.columns(3)

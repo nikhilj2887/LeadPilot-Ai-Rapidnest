@@ -179,8 +179,14 @@ class OrganizationRepository:
     @staticmethod
     def _service(model: OrganizationServiceModel) -> OrganizationService:
         return OrganizationService(
-            **{
-                column.name: getattr(model, column.name)
-                for column in model.__table__.columns
-            }
+            id=model.id,
+            organization_id=model.organization_id,
+            name=model.name,
+            short_description=model.short_description,
+            full_description=model.full_description,
+            category=model.category,
+            is_active=model.is_active,
+            display_order=model.display_order,
+            created_at=model.created_at,
+            updated_at=model.updated_at,
         )

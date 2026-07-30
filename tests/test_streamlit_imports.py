@@ -12,6 +12,7 @@ import pytest
         "leadpilot.presentation.streamlit.views.companies",
         "leadpilot.presentation.streamlit.views.discovery",
         "leadpilot.presentation.streamlit.views.proposals",
+        "leadpilot.presentation.streamlit.views.service_catalog",
         "leadpilot.presentation.streamlit.views.settings",
         "leadpilot.presentation.streamlit.views.team",
         "leadpilot.presentation.streamlit.views.platform_admin",
