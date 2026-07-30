@@ -62,3 +62,36 @@ def test_alembic_accepts_url_encoded_postgresql_password() -> None:
     assert config.get_main_option("sqlalchemy.url") == database_url
     migration_environment = Path("migrations/env.py").read_text()
     assert 'database_url.replace("%", "%%")' in migration_environment
+
+
+def test_proposal_migration_creates_tenant_aware_schema(
+    tmp_path: Path, monkeypatch
+) -> None:
+    database = tmp_path / "proposal-migration.db"
+    monkeypatch.setenv("LEADPILOT_DATABASE_URL", f"sqlite:///{database}")
+    config = Config("alembic.ini")
+    command.upgrade(config, "head")
+    inspector = inspect(create_engine(f"sqlite:///{database}"))
+
+    expected = {
+        "proposals",
+        "proposal_items",
+        "proposal_sections",
+        "proposal_versions",
+        "proposal_activities",
+    }
+    assert expected <= set(inspector.get_table_names())
+    for table in expected:
+        assert "organization_id" in {
+            column["name"] for column in inspector.get_columns(table)
+        }
+    assert {
+        "uq_proposals_org_number",
+    } <= {
+        constraint["name"]
+        for constraint in inspector.get_unique_constraints("proposals")
+    }
+    assert {
+        foreign_key["referred_table"]
+        for foreign_key in inspector.get_foreign_keys("proposal_items")
+    } >= {"proposals", "organizations", "organization_services"}

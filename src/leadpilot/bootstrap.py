@@ -17,6 +17,7 @@ from leadpilot.application.discovery import DiscoveryService
 from leadpilot.application.discovery_ai import DiscoveryAIService
 from leadpilot.application.health import HealthCheckService
 from leadpilot.application.organizations import OrganizationContext, OrganizationSummary
+from leadpilot.application.proposals import ProposalService
 from leadpilot.application.service_catalog import ServiceCatalogService
 from leadpilot.config import Settings, get_settings
 from leadpilot.infrastructure.ai_providers import create_ai_provider
@@ -29,6 +30,9 @@ from leadpilot.infrastructure.database.engine import create_database_engine
 from leadpilot.infrastructure.database.identity_repository import IdentityRepository
 from leadpilot.infrastructure.database.organization_repository import (
     OrganizationRepository,
+)
+from leadpilot.infrastructure.database.proposal_repository import (
+    SqlAlchemyProposalRepository,
 )
 from leadpilot.infrastructure.database.service_catalog_repository import (
     ServiceCatalogRepository,
@@ -50,6 +54,7 @@ class Container:
     organizations: OrganizationRepository
     companies: CompanyService
     service_catalog: ServiceCatalogService
+    proposals: ProposalService
     discovery: DiscoveryService
     discovery_ai: DiscoveryAIService
     identities: IdentityRepository
@@ -141,6 +146,12 @@ def bootstrap(
         companies=CompanyService(company_repository, audit, company_authorize),
         service_catalog=ServiceCatalogService(
             ServiceCatalogRepository(session_factory, selected_id),
+            authorize_write=company_authorize,
+            audit=audit,
+        ),
+        proposals=ProposalService(
+            SqlAlchemyProposalRepository(session_factory, selected_id),
+            user_id=user_id,
             authorize_write=company_authorize,
             audit=audit,
         ),
