@@ -653,6 +653,30 @@ membership, sets the first membership as default, and writes an audit event.
 - **Return to local SQLite:** restore
   `LEADPILOT_DATABASE_URL=sqlite:///./data/leadpilot.db` and restart.
 
+### Proposal PDF exports
+
+Proposal PDFs are generated synchronously from a tenant-scoped, immutable source
+snapshot. The renderer uses saved proposal sections and commercial line items; it
+does not invoke AI, recalculate pricing, or update the proposal. Each export has
+its own lifecycle record (`PENDING`, `GENERATING`, `READY`, `FAILED`, or
+`SUPERSEDED`), checksum, page count, branding snapshot, and unique storage key.
+Only `READY` documents with a matching checksum are downloadable.
+
+Local development stores documents outside the database under
+`.leadpilot/documents` by default. Configure the bounded export pipeline with:
+
+```bash
+LEADPILOT_DOCUMENT_STORAGE_PROVIDER=local
+LEADPILOT_DOCUMENT_STORAGE_PATH=.leadpilot/documents
+LEADPILOT_PDF_MAX_FILE_SIZE_MB=15
+LEADPILOT_PDF_LOGO_MAX_SIZE_MB=2
+```
+
+Run `alembic upgrade head` to create `proposal_documents`. Stored files are not
+served directly and storage paths are never shown in the UI. Operators should
+back up the configured document root with the database and apply equivalent
+retention controls to both.
+
 ### Rollout checklist
 
 1. Create or select the Supabase project.
