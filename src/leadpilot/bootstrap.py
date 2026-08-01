@@ -28,6 +28,8 @@ from leadpilot.application.organizations import OrganizationContext, Organizatio
 from leadpilot.application.prompt_templates import PromptTemplateService
 from leadpilot.application.proposal_context_builder import ProposalContextBuilder
 from leadpilot.application.proposal_generation import ProposalGenerationService
+from leadpilot.application.proposal_pdf import ProposalPdfService
+from leadpilot.application.proposal_pdf_snapshot import ProposalPdfSnapshotBuilder
 from leadpilot.application.proposals import ProposalService
 from leadpilot.application.service_catalog import ServiceCatalogService
 from leadpilot.config import Settings, get_settings
@@ -51,6 +53,9 @@ from leadpilot.infrastructure.database.organization_repository import (
 from leadpilot.infrastructure.database.prompt_template_repository import (
     SqlAlchemyPromptTemplateRepository,
 )
+from leadpilot.infrastructure.database.proposal_document_repository import (
+    ProposalDocumentRepository,
+)
 from leadpilot.infrastructure.database.proposal_generation_repository import (
     ProposalGenerationRepository,
 )
@@ -64,6 +69,10 @@ from leadpilot.infrastructure.database.session import create_session_factory
 from leadpilot.infrastructure.discovery_client import WebsiteClient
 from leadpilot.infrastructure.discovery_scanner import WebsiteScanner
 from leadpilot.infrastructure.gemini_provider import GeminiAIProvider
+from leadpilot.infrastructure.pdf.reportlab_proposal_renderer import (
+    ReportLabProposalPdfRenderer,
+)
+from leadpilot.infrastructure.storage.local_document_storage import LocalDocumentStorage
 from leadpilot.infrastructure.supabase_auth import SupabaseAuthProvider
 from leadpilot.logging import configure_logging
 
@@ -86,6 +95,7 @@ class Container:
     prompt_templates: PromptTemplateService
     offering_recommendations: OfferingRecommendationService
     proposal_generation: ProposalGenerationService
+    proposal_pdf: ProposalPdfService
     identities: IdentityRepository
 
     def dispose(self) -> None:
@@ -240,6 +250,23 @@ def bootstrap(
             user_id,
             intelligence_authorize,
             audit,
+        ),
+        proposal_pdf=ProposalPdfService(
+            ProposalDocumentRepository(session_factory, selected_id),
+            ProposalPdfSnapshotBuilder(
+                proposal_service,
+                company_service,
+                organization_context,
+                organization_repository,
+                user_id,
+            ),
+            ReportLabProposalPdfRenderer(),
+            LocalDocumentStorage(resolved_settings.document_storage_path),
+            selected_id,
+            user_id,
+            company_authorize,
+            audit,
+            resolved_settings.pdf_max_file_size_mb,
         ),
         identities=identity_repository,
     )

@@ -23,6 +23,7 @@ APPLICATION_TABLES = (
     "ai_runs",
     "proposal_recommendations",
     "proposal_generation_drafts",
+    "proposal_documents",
     "audit_logs",
 )
 

@@ -702,3 +702,41 @@ class ProposalGenerationDraftModel(Base):
     applied_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     rejected_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class ProposalDocumentModel(Base):
+    __tablename__ = "proposal_documents"
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    organization_id: Mapped[int] = mapped_column(
+        ForeignKey("organizations.id", ondelete="RESTRICT"), index=True
+    )
+    proposal_id: Mapped[int] = mapped_column(
+        ForeignKey("proposals.id", ondelete="CASCADE"), index=True
+    )
+    proposal_version_id: Mapped[int | None] = mapped_column(
+        ForeignKey("proposal_versions.id", ondelete="SET NULL"), index=True
+    )
+    document_type: Mapped[str] = mapped_column(String(30), index=True)
+    status: Mapped[str] = mapped_column(String(20), index=True)
+    storage_provider: Mapped[str] = mapped_column(String(30))
+    storage_key: Mapped[str] = mapped_column(String(500), unique=True)
+    file_name: Mapped[str] = mapped_column(String(200))
+    mime_type: Mapped[str] = mapped_column(String(100))
+    file_size_bytes: Mapped[int | None] = mapped_column(Integer)
+    sha256_checksum: Mapped[str | None] = mapped_column(String(64))
+    source_snapshot_hash: Mapped[str] = mapped_column(String(64), index=True)
+    source_snapshot_json: Mapped[str] = mapped_column(Text)
+    branding_snapshot_json: Mapped[str] = mapped_column(Text)
+    page_count: Mapped[int | None] = mapped_column(Integer)
+    generated_by_user_id: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL")
+    )
+    error_code: Mapped[str | None] = mapped_column(String(100))
+    safe_error_message: Mapped[str | None] = mapped_column(String(500))
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), index=True
+    )
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    failed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    superseded_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))

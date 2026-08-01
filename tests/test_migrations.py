@@ -146,3 +146,14 @@ def test_proposal_generation_migration(tmp_path: Path, monkeypatch) -> None:
         "manually_edited",
         "generated_at",
     } <= section_columns
+
+
+def test_proposal_document_migration(tmp_path: Path, monkeypatch) -> None:
+    database = tmp_path / "proposal-documents.db"
+    monkeypatch.setenv("LEADPILOT_DATABASE_URL", f"sqlite:///{database}")
+    command.upgrade(Config("alembic.ini"), "head")
+    inspector = inspect(create_engine(f"sqlite:///{database}"))
+    assert "proposal_documents" in inspector.get_table_names()
+    assert "uq_proposal_documents_storage_key" in {
+        item["name"] for item in inspector.get_unique_constraints("proposal_documents")
+    }

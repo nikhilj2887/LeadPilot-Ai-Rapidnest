@@ -17,6 +17,7 @@ from leadpilot.application.proposal_generation import (
     ProposalGenerationStatus,
     ProposalTone,
 )
+from leadpilot.application.proposal_pdf import ProposalDocumentStatus, ProposalPdfError
 from leadpilot.application.proposals import (
     TRANSITIONS,
     ProposalFilters,
@@ -154,12 +155,13 @@ def _detail(container: Container, proposal_id: int) -> None:
         f"{proposal.proposal_number} · {proposal.company_name} · "
         f"{proposal.status.value.replace('_', ' ').title()}"
     )
-    summary, items, recommendations, writer, sections, history = st.tabs(
+    summary, items, recommendations, writer, documents, sections, history = st.tabs(
         (
             "Summary",
             "Offerings & pricing",
             "AI Recommendations",
             "AI Proposal Writer",
+            "Proposal Documents",
             "Sections",
             "Versions & activity",
         )
@@ -365,6 +367,9 @@ def _detail(container: Container, proposal_id: int) -> None:
     with writer:
         _proposal_writer(container, proposal_id)
 
+    with documents:
+        _proposal_documents(container, proposal_id)
+
     with history:
         change_summary = st.text_input(
             "Version note", max_chars=500, key=f"version_note_{proposal_id}"
@@ -374,7 +379,6 @@ def _detail(container: Container, proposal_id: int) -> None:
                 lambda: service.create_version(proposal_id, change_summary or None),
                 "Version snapshot created.",
             )
-        st.button("PDF Export", disabled=True)
         st.button("Email proposal", disabled=True)
         for version in service.list_versions(proposal_id):
             st.write(
@@ -396,6 +400,7 @@ def _mutate(operation: object, message: str) -> None:
         AIError,
         RecommendationError,
         ProposalGenerationError,
+        ProposalPdfError,
         ProposalValidationError,
         ValidationError,
     ) as exc:
@@ -639,3 +644,84 @@ def _proposal_writer(container: Container, proposal_id: int) -> None:
                 )
     st.subheader("Generation History")
     st.caption(f"{len(drafts)} generation drafts retained.")
+
+
+def _proposal_documents(container: Container, proposal_id: int) -> None:
+    st.caption("PDF Export")
+    proposal = container.proposals.get_proposal(proposal_id)
+    sections = tuple(
+        section
+        for section in container.proposals.list_sections(proposal_id)
+        if section.is_enabled and section.content.strip()
+    )
+    items = container.proposals.list_items(proposal_id)
+    organization = container.organization_context.organization
+    branding = container.organizations.get_branding(organization.id)
+    st.subheader("PDF Readiness")
+    st.caption(
+        f"{proposal.proposal_number} · {proposal.company_name} · "
+        f"{len(sections)} narrative sections · {len(items)} items · "
+        f"{proposal.currency} {proposal.total_amount:,.2f}"
+    )
+    if not branding or not branding.logo_reference:
+        st.warning("No logo configured. A clean text-based tenant header will be used.")
+    if not organization.contact_email and not organization.contact_phone:
+        st.warning("Organization contact details are incomplete.")
+    if not items:
+        st.warning("This proposal has no commercial items.")
+    if not sections:
+        st.warning("This proposal has no narrative sections.")
+    st.subheader("Generate PDF")
+    suggested = f"Proposal-{proposal.proposal_number}.pdf"
+    file_name = st.text_input("PDF file name", value=suggested, max_chars=190)
+    confidential = st.checkbox("Include confidential label", value=True)
+    if st.button("Generate PDF", type="primary"):
+        _mutate(
+            lambda: container.proposal_pdf.generate_proposal_pdf(
+                proposal_id,
+                file_name=file_name,
+                include_confidential_label=confidential,
+            ),
+            "Proposal PDF generated without changing proposal data.",
+        )
+    records = container.proposal_pdf.list_proposal_documents(proposal_id)
+    ready = tuple(
+        document
+        for document in records
+        if document.status == ProposalDocumentStatus.READY
+    )
+    st.subheader("Latest PDF")
+    if ready:
+        latest = ready[0]
+        st.caption(
+            f"{latest.file_name} · {latest.page_count} pages · "
+            f"{latest.file_size_bytes or 0:,} bytes · "
+            f"Source {latest.source_snapshot_hash[:12]}"
+        )
+        _, content = container.proposal_pdf.download_proposal_document(latest.id)
+        st.download_button(
+            "Download PDF",
+            content,
+            file_name=latest.file_name,
+            mime="application/pdf",
+        )
+    else:
+        st.info("No ready PDF export exists yet.")
+    st.subheader("Export History")
+    if records:
+        st.dataframe(
+            [
+                {
+                    "Document": record.id,
+                    "File": record.file_name,
+                    "Status": record.status.value,
+                    "Created": record.created_at,
+                    "Pages": record.page_count,
+                    "Size": record.file_size_bytes,
+                    "Source hash": record.source_snapshot_hash[:12],
+                }
+                for record in records
+            ],
+            hide_index=True,
+            width="stretch",
+        )

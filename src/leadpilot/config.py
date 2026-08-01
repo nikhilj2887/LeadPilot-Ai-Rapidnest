@@ -4,6 +4,7 @@ import logging
 import os
 from dataclasses import dataclass
 from functools import lru_cache
+from pathlib import Path
 
 from dotenv import load_dotenv
 
@@ -38,6 +39,10 @@ class Settings:
     supabase_anon_key: str | None = None
     supabase_service_role_key: str | None = None
     auth_redirect_url: str | None = None
+    document_storage_provider: str = "local"
+    document_storage_path: Path = Path(".leadpilot/documents")
+    pdf_max_file_size_mb: int = 15
+    pdf_logo_max_size_mb: int = 2
 
     @classmethod
     def from_env(cls, env_file: str | None = ".env") -> Settings:
@@ -124,6 +129,16 @@ class Settings:
             or None,
             auth_redirect_url=os.getenv("LEADPILOT_AUTH_REDIRECT_URL", "").strip()
             or None,
+            document_storage_provider=os.getenv(
+                "LEADPILOT_DOCUMENT_STORAGE_PROVIDER", "local"
+            )
+            .strip()
+            .lower(),
+            document_storage_path=Path(
+                os.getenv("LEADPILOT_DOCUMENT_STORAGE_PATH", ".leadpilot/documents")
+            ),
+            pdf_max_file_size_mb=int(os.getenv("LEADPILOT_PDF_MAX_FILE_SIZE_MB", "15")),
+            pdf_logo_max_size_mb=int(os.getenv("LEADPILOT_PDF_LOGO_MAX_SIZE_MB", "2")),
         )
 
     @property
