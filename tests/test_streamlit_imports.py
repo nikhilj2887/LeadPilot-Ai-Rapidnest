@@ -16,6 +16,7 @@ import pytest
         "leadpilot.presentation.streamlit.views.settings",
         "leadpilot.presentation.streamlit.views.team",
         "leadpilot.presentation.streamlit.views.platform_admin",
+        "leadpilot.presentation.streamlit.public.proposal_portal",
         "leadpilot.presentation.streamlit.auth_ui",
     ],
 )

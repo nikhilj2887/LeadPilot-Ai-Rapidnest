@@ -178,3 +178,24 @@ def test_proposal_email_migration(tmp_path: Path, monkeypatch) -> None:
         item["name"]
         for item in inspector.get_check_constraints("email_provider_configs")
     }
+
+
+def test_secure_proposal_portal_migration(tmp_path: Path, monkeypatch) -> None:
+    database = tmp_path / "proposal-portal.db"
+    monkeypatch.setenv("LEADPILOT_DATABASE_URL", f"sqlite:///{database}")
+    command.upgrade(Config("alembic.ini"), "head")
+    inspector = inspect(create_engine(f"sqlite:///{database}"))
+    assert {"proposal_portal_links", "proposal_portal_access_events"} <= set(
+        inspector.get_table_names()
+    )
+    assert "uq_proposal_portal_links_token_hash" in {
+        item["name"]
+        for item in inspector.get_unique_constraints("proposal_portal_links")
+    }
+    assert {
+        "ck_portal_links_access_count",
+        "ck_portal_links_max_access_count",
+    } <= {
+        item["name"]
+        for item in inspector.get_check_constraints("proposal_portal_links")
+    }

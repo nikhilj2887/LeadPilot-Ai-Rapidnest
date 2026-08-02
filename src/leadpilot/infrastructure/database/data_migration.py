@@ -26,6 +26,8 @@ APPLICATION_TABLES = (
     "proposal_documents",
     "email_provider_configs",
     "proposal_email_deliveries",
+    "proposal_portal_links",
+    "proposal_portal_access_events",
     "audit_logs",
 )
 

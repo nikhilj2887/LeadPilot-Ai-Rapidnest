@@ -855,3 +855,86 @@ class ProposalEmailDeliveryModel(Base):
     failed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     cancelled_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     superseded_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class ProposalPortalLinkModel(Base):
+    __tablename__ = "proposal_portal_links"
+    __table_args__ = (
+        CheckConstraint("access_count >= 0", name="ck_portal_links_access_count"),
+        CheckConstraint(
+            "max_access_count IS NULL OR max_access_count > 0",
+            name="ck_portal_links_max_access_count",
+        ),
+        Index(
+            "ix_proposal_portal_links_history",
+            "organization_id",
+            "proposal_id",
+            "created_at",
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    organization_id: Mapped[int] = mapped_column(
+        ForeignKey("organizations.id", ondelete="RESTRICT"), index=True
+    )
+    proposal_id: Mapped[int] = mapped_column(
+        ForeignKey("proposals.id", ondelete="CASCADE"), index=True
+    )
+    proposal_document_id: Mapped[int] = mapped_column(
+        ForeignKey("proposal_documents.id", ondelete="RESTRICT"), index=True
+    )
+    status: Mapped[str] = mapped_column(String(20), index=True)
+    token_hash: Mapped[str] = mapped_column(String(64), unique=True, index=True)
+    token_prefix: Mapped[str] = mapped_column(String(12))
+    password_hash: Mapped[str | None] = mapped_column(String(500))
+    password_required: Mapped[bool] = mapped_column(Boolean, default=False)
+    expires_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), index=True
+    )
+    max_access_count: Mapped[int | None] = mapped_column(Integer)
+    access_count: Mapped[int] = mapped_column(Integer, default=0)
+    allow_pdf_download: Mapped[bool] = mapped_column(Boolean, default=True)
+    show_pricing: Mapped[bool] = mapped_column(Boolean, default=True)
+    show_internal_branding_details: Mapped[bool] = mapped_column(Boolean, default=False)
+    created_by_user_id: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL")
+    )
+    revoked_by_user_id: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL")
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), index=True
+    )
+    activated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    last_accessed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    superseded_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class ProposalPortalAccessEventModel(Base):
+    __tablename__ = "proposal_portal_access_events"
+    __table_args__ = (
+        Index(
+            "ix_proposal_portal_access_events_history",
+            "organization_id",
+            "portal_link_id",
+            "created_at",
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    organization_id: Mapped[int] = mapped_column(
+        ForeignKey("organizations.id", ondelete="RESTRICT"), index=True
+    )
+    portal_link_id: Mapped[int] = mapped_column(
+        ForeignKey("proposal_portal_links.id", ondelete="CASCADE"), index=True
+    )
+    event_type: Mapped[str] = mapped_column(String(40), index=True)
+    access_result: Mapped[str] = mapped_column(String(20), index=True)
+    ip_hash: Mapped[str | None] = mapped_column(String(64))
+    user_agent_hash: Mapped[str | None] = mapped_column(String(64))
+    session_hash: Mapped[str | None] = mapped_column(String(64))
+    safe_metadata_json: Mapped[str | None] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), index=True
+    )

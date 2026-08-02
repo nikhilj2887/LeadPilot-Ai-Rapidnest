@@ -35,6 +35,11 @@ from leadpilot.application.proposal_email import (
 from leadpilot.application.proposal_generation import ProposalGenerationService
 from leadpilot.application.proposal_pdf import ProposalPdfService
 from leadpilot.application.proposal_pdf_snapshot import ProposalPdfSnapshotBuilder
+from leadpilot.application.proposal_portal import (
+    PortalRateLimiter,
+    ProposalPortalAccessService,
+    ProposalPortalManagementService,
+)
 from leadpilot.application.proposals import ProposalService
 from leadpilot.application.service_catalog import ServiceCatalogService
 from leadpilot.config import Settings, get_settings
@@ -69,6 +74,9 @@ from leadpilot.infrastructure.database.proposal_email_repository import (
 )
 from leadpilot.infrastructure.database.proposal_generation_repository import (
     ProposalGenerationRepository,
+)
+from leadpilot.infrastructure.database.proposal_portal_repository import (
+    ProposalPortalRepository,
 )
 from leadpilot.infrastructure.database.proposal_repository import (
     SqlAlchemyProposalRepository,
@@ -112,6 +120,7 @@ class Container:
     proposal_generation: ProposalGenerationService
     proposal_pdf: ProposalPdfService
     proposal_email: ProposalEmailService
+    proposal_portal: ProposalPortalManagementService
     identities: IdentityRepository
 
     def dispose(self) -> None:
@@ -309,7 +318,41 @@ def bootstrap(
             audit,
             resolved_settings.email_max_attachment_mb,
         ),
+        proposal_portal=ProposalPortalManagementService(
+            ProposalPortalRepository(session_factory, selected_id),
+            proposal_service,
+            proposal_pdf_service,
+            resolved_settings.portal_token_pepper,
+            user_id,
+            company_authorize,
+            audit,
+        ),
         identities=identity_repository,
+    )
+
+
+def bootstrap_public_portal(
+    settings: Settings | None = None,
+) -> ProposalPortalAccessService:
+    """Build the isolated public-token access boundary without internal navigation."""
+    resolved = settings or get_settings()
+    engine = create_database_engine(resolved.database_url)
+    factory = create_session_factory(engine)
+    repository = ProposalPortalRepository(factory, None)
+    return ProposalPortalAccessService(
+        repository,
+        lambda organization_id: (
+            bootstrap(resolved, organization_id=organization_id).proposal_pdf
+        ),
+        resolved.portal_token_pepper,
+        resolved.portal_metadata_hash_pepper,
+        PortalRateLimiter(
+            resolved.portal_rate_limit_attempts,
+            resolved.portal_rate_limit_window_seconds,
+        ),
+        resolved.portal_record_access_events,
+        resolved.portal_password_max_attempts,
+        resolved.pdf_max_file_size_mb,
     )
 
 

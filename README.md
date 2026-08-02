@@ -720,6 +720,49 @@ deliveries and bounded by configuration; resend creates a new record without
 altering the original sent delivery. Public proposal links, open/click tracking,
 webhooks, and client acceptance remain deferred.
 
+### Secure client proposal portal
+
+The public proposal portal is a dedicated Streamlit entry point with no internal
+sidebar, organization selector, authenticated routes, or administration links:
+
+```bash
+streamlit run public_portal.py
+```
+
+Public URLs carry only a high-entropy URL-safe token in `portal_token`. The raw
+token is returned once during link creation and is never persisted; the database
+stores an HMAC-SHA-256 token hash and a short support prefix. Configure unique,
+secret production peppers rather than relying on development defaults:
+
+```bash
+LEADPILOT_PORTAL_TOKEN_PEPPER=
+LEADPILOT_PORTAL_METADATA_HASH_PEPPER=
+LEADPILOT_PORTAL_RECORD_ACCESS_EVENTS=true
+LEADPILOT_PORTAL_RATE_LIMIT_ATTEMPTS=20
+LEADPILOT_PORTAL_RATE_LIMIT_WINDOW_SECONDS=300
+LEADPILOT_PORTAL_PASSWORD_MAX_ATTEMPTS=5
+LEADPILOT_PORTAL_PASSWORD_LOCK_MINUTES=15
+```
+
+Links support draft activation, expiry, revocation, superseding, regeneration,
+optional view limits, pricing visibility, and controlled PDF download. Optional
+passwords are hashed with salted `scrypt`; plaintext passwords cannot be read
+back. Successful proposal views increment the access count. PDF downloads do not
+consume an additional view, but have an independent request rate limit.
+
+The public view is derived from the immutable client-facing snapshot attached to
+the linked READY PDF. It excludes internal notes, activities, AI histories,
+provider metadata, database identifiers, and storage details. Access history
+stores only peppered request hashes and allow-listed event metadata—never raw IP
+addresses, user agents, tokens, passwords, or cookies.
+
+The initial limiter is process-local and suitable for the current single-process
+architecture and deterministic tests. Production deployments with multiple
+workers should add gateway- or Redis-backed distributed limits, TLS, secure
+secret management, and a dedicated public hostname. Acceptance, rejection,
+e-signatures, comments, client accounts, tracking analytics, and custom domains
+remain deferred.
+
 ### Rollout checklist
 
 1. Create or select the Supabase project.
