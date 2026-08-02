@@ -169,4 +169,5 @@ class ProposalDocumentRepository:
             model.created_at,
             model.completed_at,
             model.safe_error_message,
+            model.mime_type,
         )

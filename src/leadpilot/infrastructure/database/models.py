@@ -5,10 +5,12 @@ from decimal import Decimal
 
 from sqlalchemy import (
     Boolean,
+    CheckConstraint,
     Date,
     DateTime,
     Float,
     ForeignKey,
+    Index,
     Integer,
     Numeric,
     String,
@@ -739,4 +741,117 @@ class ProposalDocumentModel(Base):
     )
     completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     failed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    superseded_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class EmailProviderConfigModel(Base):
+    __tablename__ = "email_provider_configs"
+    __table_args__ = (
+        CheckConstraint(
+            "smtp_port IS NULL OR (smtp_port >= 1 AND smtp_port <= 65535)",
+            name="ck_email_provider_configs_port",
+        ),
+        CheckConstraint(
+            "NOT (smtp_use_tls AND smtp_use_ssl)",
+            name="ck_email_provider_configs_transport",
+        ),
+        Index(
+            "ix_email_provider_configs_resolution",
+            "organization_id",
+            "provider",
+            "is_active",
+            "is_default",
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    organization_id: Mapped[int | None] = mapped_column(
+        ForeignKey("organizations.id", ondelete="CASCADE"), index=True
+    )
+    provider: Mapped[str] = mapped_column(String(30), index=True)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True, index=True)
+    is_default: Mapped[bool] = mapped_column(Boolean, default=False, index=True)
+    from_address: Mapped[str] = mapped_column(String(320))
+    from_name: Mapped[str] = mapped_column(String(200))
+    reply_to_address: Mapped[str | None] = mapped_column(String(320))
+    credentials_reference: Mapped[str | None] = mapped_column(String(300))
+    smtp_host: Mapped[str | None] = mapped_column(String(255))
+    smtp_port: Mapped[int | None] = mapped_column(Integer)
+    smtp_use_tls: Mapped[bool] = mapped_column(Boolean, default=True)
+    smtp_use_ssl: Mapped[bool] = mapped_column(Boolean, default=False)
+    request_timeout_seconds: Mapped[int] = mapped_column(Integer, default=30)
+    max_retries: Mapped[int] = mapped_column(Integer, default=2)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+
+
+class ProposalEmailDeliveryModel(Base):
+    __tablename__ = "proposal_email_deliveries"
+    __table_args__ = (
+        UniqueConstraint(
+            "organization_id",
+            "idempotency_key",
+            name="uq_proposal_email_deliveries_idempotency",
+        ),
+        CheckConstraint(
+            "attempt_count >= 0", name="ck_proposal_email_deliveries_attempt_count"
+        ),
+        Index(
+            "ix_proposal_email_deliveries_history",
+            "organization_id",
+            "proposal_id",
+            "created_at",
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    organization_id: Mapped[int] = mapped_column(
+        ForeignKey("organizations.id", ondelete="RESTRICT"), index=True
+    )
+    proposal_id: Mapped[int] = mapped_column(
+        ForeignKey("proposals.id", ondelete="CASCADE"), index=True
+    )
+    proposal_document_id: Mapped[int] = mapped_column(
+        ForeignKey("proposal_documents.id", ondelete="RESTRICT"), index=True
+    )
+    provider_config_id: Mapped[int | None] = mapped_column(
+        ForeignKey("email_provider_configs.id", ondelete="SET NULL"), index=True
+    )
+    original_delivery_id: Mapped[int | None] = mapped_column(
+        ForeignKey("proposal_email_deliveries.id", ondelete="SET NULL"), index=True
+    )
+    status: Mapped[str] = mapped_column(String(20), index=True)
+    from_address: Mapped[str] = mapped_column(String(320))
+    from_name: Mapped[str] = mapped_column(String(200))
+    reply_to_address: Mapped[str | None] = mapped_column(String(320))
+    to_addresses_json: Mapped[str] = mapped_column(Text)
+    cc_addresses_json: Mapped[str] = mapped_column(Text, default="[]")
+    bcc_addresses_json: Mapped[str] = mapped_column(Text, default="[]")
+    subject: Mapped[str] = mapped_column(String(300))
+    html_body: Mapped[str] = mapped_column(Text)
+    text_body: Mapped[str] = mapped_column(Text)
+    attachment_file_name: Mapped[str] = mapped_column(String(200))
+    attachment_sha256_checksum: Mapped[str] = mapped_column(String(64))
+    provider: Mapped[str] = mapped_column(String(30), index=True)
+    provider_message_id: Mapped[str | None] = mapped_column(String(300))
+    provider_response_json: Mapped[str | None] = mapped_column(Text)
+    idempotency_key: Mapped[str | None] = mapped_column(String(64))
+    attempt_count: Mapped[int] = mapped_column(Integer, default=0)
+    safe_error_code: Mapped[str | None] = mapped_column(String(100))
+    safe_error_message: Mapped[str | None] = mapped_column(String(500))
+    created_by_user_id: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL")
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), index=True
+    )
+    queued_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    sending_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    sent_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    failed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    cancelled_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     superseded_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))

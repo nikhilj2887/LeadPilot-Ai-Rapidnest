@@ -51,6 +51,7 @@ class ProposalDocument:
     created_at: datetime
     completed_at: datetime | None
     safe_error_message: str | None
+    mime_type: str = "application/pdf"
 
 
 @dataclass(frozen=True, slots=True)
@@ -203,6 +204,10 @@ class ProposalPdfService:
     def list_proposal_documents(self, proposal_id: int) -> tuple[ProposalDocument, ...]:
         self._builder.build(proposal_id)
         return self._repository.list_by_proposal(proposal_id)
+
+    def get_proposal_document(self, document_id: int) -> ProposalDocument | None:
+        """Return a tenant-scoped document without exposing repository details."""
+        return self._repository.get_by_id(document_id)
 
     def download_proposal_document(
         self, document_id: int
