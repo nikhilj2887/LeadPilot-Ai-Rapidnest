@@ -177,6 +177,7 @@ def _detail(container: Container, proposal_id: int) -> None:
         email,
         portal,
         acceptance,
+        intelligence,
         sections,
         history,
     ) = st.tabs(
@@ -189,6 +190,7 @@ def _detail(container: Container, proposal_id: int) -> None:
             "Email Delivery",
             "Client Portal",
             "Acceptance",
+            "Proposal Intelligence",
             "Sections",
             "Versions & activity",
         )
@@ -405,6 +407,9 @@ def _detail(container: Container, proposal_id: int) -> None:
 
     with acceptance:
         _proposal_acceptance(container, proposal_id)
+
+    with intelligence:
+        _proposal_intelligence(container, proposal_id)
 
     with history:
         change_summary = st.text_input(
@@ -986,6 +991,113 @@ def _proposal_acceptance(container: Container, proposal_id: int) -> None:
         ],
         hide_index=True,
         width="stretch",
+    )
+
+
+def _proposal_intelligence(container: Container, proposal_id: int) -> None:
+    analytics = container.proposal_engagement.proposal_analytics(proposal_id)
+    metrics = analytics.metrics
+    for column, (label, value) in zip(
+        st.columns(5),
+        (
+            ("Views", metrics.total_views),
+            ("Visitors", metrics.unique_visitors),
+            ("Downloads", metrics.downloads),
+            ("Sessions", metrics.total_sessions),
+            ("Average session", f"{metrics.average_time_ms / 1000:.1f}s"),
+        ),
+        strict=True,
+    ):
+        column.metric(label, value)
+    st.subheader("Section heatmap")
+    if analytics.heatmap:
+        maximum = (
+            max(
+                max(views, duration // 1000) for _, views, duration in analytics.heatmap
+            )
+            or 1
+        )
+        for key, views, duration in analytics.heatmap:
+            intensity = max(views, duration // 1000)
+            st.write(f"**{key.replace('_', ' ').title()}**")
+            st.progress(
+                intensity / maximum, text=f"{views} views · {duration / 1000:.1f}s"
+            )
+    else:
+        st.info("No section engagement has been recorded.")
+    charts = st.columns(3)
+    with charts[0]:
+        st.caption("Daily proposal views")
+        st.bar_chart(dict(analytics.daily_views))
+    with charts[1]:
+        st.caption("Views by hour")
+        st.bar_chart(dict(analytics.views_by_hour))
+    with charts[2]:
+        st.caption("Downloads by day")
+        st.bar_chart(dict(analytics.downloads_by_day))
+    st.caption("Acceptance funnel")
+    st.bar_chart(
+        {
+            "Viewed": metrics.total_views,
+            "Downloaded": metrics.downloads,
+            "Accepted": round(
+                metrics.acceptance_rate
+                * max(
+                    sum(
+                        event.event_type.value in {"ACCEPTED", "REJECTED"}
+                        for event in analytics.timeline
+                    ),
+                    1,
+                )
+                / 100
+            ),
+        }
+    )
+    if analytics.insights:
+        st.subheader("Sales insights")
+        for insight in analytics.insights:
+            st.info(insight)
+    st.subheader("Engagement timeline")
+    if analytics.timeline:
+        st.dataframe(
+            [
+                {
+                    "Date": event.created_at,
+                    "Event": event.event_type.value.replace("_", " ").title(),
+                    "Visitor": event.visitor_hash[:12],
+                    "Session": event.session_hash[:12],
+                    "Section": event.section_key or "—",
+                    "Duration": event.duration_ms or "—",
+                }
+                for event in analytics.timeline
+            ],
+            hide_index=True,
+            width="stretch",
+        )
+        st.subheader("Visitor history")
+        visitors: dict[str, set[str]] = {}
+        for event in analytics.timeline:
+            visitors.setdefault(event.visitor_hash, set()).add(event.session_hash)
+        st.dataframe(
+            [
+                {
+                    "Visitor": visitor[:12],
+                    "Sessions": len(sessions),
+                    "Returned": len(sessions) > 1,
+                }
+                for visitor, sessions in visitors.items()
+            ],
+            hide_index=True,
+            width="stretch",
+        )
+    st.download_button(
+        "Export analytics CSV",
+        container.proposal_engagement.export_csv(proposal_id),
+        file_name="proposal-engagement.csv",
+        mime="text/csv",
+        key=f"engagement_export_{proposal_id}",
+        on_click=container.proposal_engagement.audit_export,
+        args=(proposal_id,),
     )
 
 

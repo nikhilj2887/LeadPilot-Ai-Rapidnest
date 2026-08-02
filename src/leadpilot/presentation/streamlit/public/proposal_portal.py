@@ -10,6 +10,7 @@ from leadpilot.application.proposal_acceptance import (
     ProposalAcceptanceStatus,
     SignatureType,
 )
+from leadpilot.application.proposal_engagement import EngagementEventType
 from leadpilot.application.proposal_portal import (
     PortalDownloadDisabledError,
     PortalLinkExpiredError,
@@ -21,6 +22,7 @@ from leadpilot.application.proposal_portal import (
     ProposalPortalError,
 )
 from leadpilot.bootstrap import bootstrap_public_portal
+from leadpilot.presentation.streamlit.components_engagement import engagement_timer
 from leadpilot.presentation.streamlit.components_signature import signature_pad
 
 
@@ -62,7 +64,16 @@ def render() -> None:
     except ProposalPortalError:
         _unavailable("Proposal unavailable")
         return
-    _proposal(view, service, services.acceptance, context)
+    _track_once(services.engagement, context, EngagementEventType.PORTAL_OPENED)
+    _track_once(services.engagement, context, EngagementEventType.PROPOSAL_VIEWED)
+    _track_once(
+        services.engagement,
+        context,
+        EngagementEventType.PAGE_VIEWED,
+        page_number=1,
+    )
+    _track_elapsed(services.engagement, context)
+    _proposal(view, service, services.acceptance, services.engagement, context)
 
 
 def _resolve(service: object, token: str):
@@ -92,7 +103,11 @@ def _resolve(service: object, token: str):
 
 
 def _proposal(
-    view: object, service: object, acceptance_service: object, context: object
+    view: object,
+    service: object,
+    acceptance_service: object,
+    engagement_service: object,
+    context: object,
 ) -> None:
     branding = view.branding  # type: ignore[attr-defined]
     proposal = view.proposal  # type: ignore[attr-defined]
@@ -112,6 +127,14 @@ def _proposal(
     for section in view.sections:  # type: ignore[attr-defined]
         st.subheader(str(section.get("title") or ""))
         st.write(str(section.get("content") or ""))
+        _track_once(
+            engagement_service,
+            context,
+            EngagementEventType.SECTION_VIEWED,
+            section_key=str(
+                section.get("section_key") or section.get("key") or "section"
+            ).lower(),
+        )
     if view.commercial is not None:  # type: ignore[attr-defined]
         st.subheader("Commercial Summary")
         st.dataframe(
@@ -142,6 +165,12 @@ def _proposal(
                 content,
                 file_name=filename,
                 mime="application/pdf",
+                on_click=_track_once,
+                args=(
+                    engagement_service,
+                    context,
+                    EngagementEventType.PDF_DOWNLOADED,
+                ),
             )
     contact = " · ".join(
         str(value)
@@ -155,10 +184,12 @@ def _proposal(
         st.caption(str(branding["proposal_footer"]))
     if view.expires_at:  # type: ignore[attr-defined]
         st.caption(f"Secure link expires {view.expires_at}")  # type: ignore[attr-defined]
-    _acceptance(acceptance_service, context)
+    _acceptance(acceptance_service, context, engagement_service)
 
 
-def _acceptance(service: object, context: object) -> None:
+def _acceptance(
+    service: object, context: object, engagement_service: object | None = None
+) -> None:
     existing = service.get_for_portal(context)  # type: ignore[attr-defined]
     if existing and existing.status == ProposalAcceptanceStatus.ACCEPTED:
         st.success(
@@ -200,10 +231,28 @@ def _acceptance(service: object, context: object) -> None:
             typed_signature = st.text_input("Type your legal name as signature")
         else:
             st.caption("Draw your signature in the canvas below.")
+            if engagement_service is not None:
+                _track_once(
+                    engagement_service,
+                    context,
+                    EngagementEventType.SIGNATURE_STARTED,
+                )
             signature_png = signature_pad(key="public_acceptance_signature")
+            if signature_png and engagement_service is not None:
+                _track_once(
+                    engagement_service,
+                    context,
+                    EngagementEventType.SIGNATURE_COMPLETED,
+                )
         authorized = st.checkbox("I confirm I am authorized to accept this proposal.")
         if st.button("Submit Acceptance", type="primary", disabled=not authorized):
             ip_address, user_agent = _request_metadata()
+            if engagement_service is not None:
+                _track_once(
+                    engagement_service,
+                    context,
+                    EngagementEventType.ACCEPT_CLICKED,
+                )
             try:
                 accepted = service.accept_proposal(  # type: ignore[attr-defined]
                     context,
@@ -225,6 +274,12 @@ def _acceptance(service: object, context: object) -> None:
             except ProposalAcceptanceError as exc:
                 st.error(str(exc))
             else:
+                if engagement_service is not None:
+                    _track_once(
+                        engagement_service,
+                        context,
+                        EngagementEventType.ACCEPTED,
+                    )
                 st.session_state.public_acceptance_complete = accepted.id
                 st.rerun()
     with reject_tab:
@@ -234,6 +289,12 @@ def _acceptance(service: object, context: object) -> None:
         )
         if st.button("Reject Proposal", disabled=not reject_confirm):
             ip_address, user_agent = _request_metadata()
+            if engagement_service is not None:
+                _track_once(
+                    engagement_service,
+                    context,
+                    EngagementEventType.REJECT_CLICKED,
+                )
             try:
                 service.reject_proposal(  # type: ignore[attr-defined]
                     context,
@@ -245,6 +306,12 @@ def _acceptance(service: object, context: object) -> None:
             except ProposalAcceptanceError as exc:
                 st.error(str(exc))
             else:
+                if engagement_service is not None:
+                    _track_once(
+                        engagement_service,
+                        context,
+                        EngagementEventType.REJECTED,
+                    )
                 st.rerun()
 
 
@@ -263,6 +330,65 @@ def _request_metadata() -> tuple[str | None, str | None]:
         ip_address = str(headers.get("X-Real-IP", "")).strip()
     user_agent = str(headers.get("User-Agent", "")).strip()
     return ip_address or None, user_agent or None
+
+
+def _track_once(
+    service: object,
+    context: object,
+    event_type: EngagementEventType,
+    *,
+    page_number: int | None = None,
+    section_key: str | None = None,
+) -> None:
+    suffix = f"{event_type.value}:{page_number or ''}:{section_key or ''}"
+    state_key = f"engagement:{suffix}"
+    if st.session_state.get(state_key):
+        return
+    ip_address, user_agent = _request_metadata()
+    try:
+        service.track(  # type: ignore[attr-defined]
+            context,
+            event_type,
+            visitor_id=_public_visitor_identifier(),
+            session_id=_public_session_identifier(),
+            page_number=page_number,
+            section_key=section_key,
+            ip_address=ip_address,
+            user_agent=user_agent,
+        )
+    except (TypeError, ValueError):
+        return
+    st.session_state[state_key] = True
+
+
+def _public_visitor_identifier() -> str:
+    if "public_engagement_visitor" not in st.session_state:
+        st.session_state.public_engagement_visitor = uuid.uuid4().hex
+    return str(st.session_state.public_engagement_visitor)
+
+
+def _track_elapsed(service: object, context: object) -> None:
+    sample = engagement_timer(key="public_proposal_engagement_timer")
+    if not sample or sample["duration_ms"] <= 0:
+        return
+    state_key = f"engagement:timer:{sample['sequence']}"
+    if st.session_state.get(state_key):
+        return
+    ip_address, user_agent = _request_metadata()
+    try:
+        service.track(  # type: ignore[attr-defined]
+            context,
+            EngagementEventType.TIME_ON_PAGE,
+            visitor_id=_public_visitor_identifier(),
+            session_id=_public_session_identifier(),
+            page_number=1,
+            duration_ms=sample["duration_ms"],
+            ip_address=ip_address,
+            user_agent=user_agent,
+        )
+    except (TypeError, ValueError):
+        return
+    st.session_state[state_key] = True
 
 
 def _unavailable(title: str) -> None:

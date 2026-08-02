@@ -33,6 +33,7 @@ from leadpilot.application.proposal_email import (
     ProposalEmailService,
     ProposalEmailTemplateBuilder,
 )
+from leadpilot.application.proposal_engagement import ProposalEngagementService
 from leadpilot.application.proposal_generation import ProposalGenerationService
 from leadpilot.application.proposal_pdf import ProposalPdfService
 from leadpilot.application.proposal_pdf_snapshot import ProposalPdfSnapshotBuilder
@@ -75,6 +76,9 @@ from leadpilot.infrastructure.database.proposal_document_repository import (
 )
 from leadpilot.infrastructure.database.proposal_email_repository import (
     ProposalEmailRepository,
+)
+from leadpilot.infrastructure.database.proposal_engagement_repository import (
+    ProposalEngagementRepository,
 )
 from leadpilot.infrastructure.database.proposal_generation_repository import (
     ProposalGenerationRepository,
@@ -129,6 +133,7 @@ class Container:
     proposal_email: ProposalEmailService
     proposal_portal: ProposalPortalManagementService
     proposal_acceptance: ProposalAcceptanceService
+    proposal_engagement: ProposalEngagementService
     identities: IdentityRepository
 
     def dispose(self) -> None:
@@ -346,6 +351,12 @@ def bootstrap(
             resolved_settings.portal_metadata_hash_pepper,
             audit,
         ),
+        proposal_engagement=ProposalEngagementService(
+            ProposalEngagementRepository(session_factory, selected_id),
+            resolved_settings.portal_metadata_hash_pepper,
+            company_authorize,
+            audit,
+        ),
         identities=identity_repository,
     )
 
@@ -354,6 +365,7 @@ def bootstrap(
 class PublicPortalContainer:
     portal: ProposalPortalAccessService
     acceptance: ProposalAcceptanceService
+    engagement: ProposalEngagementService
 
 
 def bootstrap_public_portal(
@@ -388,6 +400,10 @@ def bootstrap_public_portal(
             pdf_factory,
             LocalDocumentStorage(resolved.document_storage_path),
             ReportLabSignedAcceptanceRenderer(),
+            resolved.portal_metadata_hash_pepper,
+        ),
+        ProposalEngagementService(
+            ProposalEngagementRepository(factory, None),
             resolved.portal_metadata_hash_pepper,
         ),
     )

@@ -23,15 +23,11 @@ from leadpilot.application.proposal_acceptance import (
     SignatureType,
     validate_signature_png,
 )
-from leadpilot.application.proposal_portal import (
-    ProposalPortalAccessContext,
-    ProposalPortalLink,
-    ProposalPortalLinkStatus,
-)
 from leadpilot.infrastructure.pdf.reportlab_acceptance_renderer import (
     ReportLabSignedAcceptanceRenderer,
 )
 from leadpilot.infrastructure.storage.local_document_storage import LocalDocumentStorage
+from tests.test_support import build_acceptance_context
 
 
 def _pdf() -> bytes:
@@ -49,33 +45,6 @@ def _png(*, drawn: bool = True, size: tuple[int, int] = (180, 80)) -> bytes:
     output = io.BytesIO()
     image.save(output, format="PNG")
     return output.getvalue()
-
-
-def _context(org: int = 1) -> ProposalPortalAccessContext:
-    link = ProposalPortalLink(
-        7,
-        org,
-        11,
-        13,
-        ProposalPortalLinkStatus.ACTIVE,
-        "hash",
-        "prefix",
-        None,
-        False,
-        None,
-        None,
-        0,
-        True,
-        True,
-        None,
-        None,
-        datetime.now(UTC),
-        datetime.now(UTC),
-        None,
-        None,
-        None,
-    )
-    return ProposalPortalAccessContext(link, "request")
 
 
 class _Repository:
@@ -200,7 +169,7 @@ def _typed(**changes) -> AcceptanceSubmission:
 def test_typed_acceptance_generates_signed_copy_and_audit_events(tmp_path) -> None:
     service, repository, events = _service(tmp_path)
     accepted = service.accept_proposal(
-        _context(),
+        build_acceptance_context(),
         _typed(),
         ip_address="192.0.2.1",
         user_agent="browser",
@@ -223,7 +192,7 @@ def test_typed_acceptance_generates_signed_copy_and_audit_events(tmp_path) -> No
 def test_handwritten_acceptance_stores_only_png(tmp_path) -> None:
     service, repository, _ = _service(tmp_path)
     service.accept_proposal(
-        _context(),
+        build_acceptance_context(),
         _typed(
             signature_type=SignatureType.HANDWRITTEN,
             typed_signature=None,
@@ -250,7 +219,7 @@ def test_acceptance_validation_rejects_invalid_typed_submissions(
 ) -> None:
     service, _, _ = _service(tmp_path)
     with pytest.raises(AcceptanceValidationError, match=message):
-        service.accept_proposal(_context(), _typed(**changes))
+        service.accept_proposal(build_acceptance_context(), _typed(**changes))
 
 
 @pytest.mark.parametrize(
@@ -280,14 +249,14 @@ def test_duplicate_acceptance_is_rejected_before_file_creation(tmp_path) -> None
     repository.result = _acceptance(ProposalAcceptanceStatus.ACCEPTED)
     service, _, _ = _service(tmp_path, repository)
     with pytest.raises(AcceptanceAlreadyCompletedError):
-        service.accept_proposal(_context(), _typed())
+        service.accept_proposal(build_acceptance_context(), _typed())
     assert not tuple(tmp_path.rglob("*"))
 
 
 def test_rejection_records_reason_hashes_and_prevents_replay(tmp_path) -> None:
     service, repository, events = _service(tmp_path)
     rejected = service.reject_proposal(
-        _context(),
+        build_acceptance_context(),
         "  Not in budget  ",
         ip_address="192.0.2.8",
         session_identifier="client",

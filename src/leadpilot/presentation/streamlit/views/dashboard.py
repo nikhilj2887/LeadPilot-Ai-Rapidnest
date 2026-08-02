@@ -139,6 +139,31 @@ def _ai_intelligence(container: Container) -> None:
         )
 
 
+def _proposal_intelligence(container: Container) -> None:
+    metrics = container.proposal_engagement.organization_metrics()
+    section_header(
+        "Proposal Intelligence",
+        "Tenant-wide proposal engagement and conversion signals.",
+    )
+    values = (
+        ("Proposals Sent", metrics.proposals_sent),
+        ("Viewed", metrics.viewed),
+        ("Downloaded", metrics.downloaded),
+        ("Accepted", metrics.accepted),
+        ("Rejected", metrics.rejected),
+        ("Expired", metrics.expired),
+        (
+            "Average Acceptance",
+            f"{metrics.average_acceptance_time_ms / 3_600_000:.1f}h",
+        ),
+        ("Average Views", metrics.average_views),
+        ("Average Downloads", metrics.average_downloads),
+    )
+    for row in (values[:5], values[5:]):
+        for column, (label, value) in zip(st.columns(len(row)), row, strict=True):
+            column.metric(label, value)
+
+
 def render(container: Container) -> None:
     header, refresh = st.columns([6, 1])
     with header:
@@ -214,4 +239,5 @@ def render(container: Container) -> None:
 
     _discovery_intelligence(container)
     _ai_intelligence(container)
+    _proposal_intelligence(container)
     _quick_actions()
