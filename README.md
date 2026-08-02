@@ -773,6 +773,21 @@ secret management, and a dedicated public hostname. Client accounts, tracking
 analytics, identity verification, multi-party signatures, and custom domains
 remain deferred.
 
+### Proposal engagement analytics
+
+The secure portal records tenant-scoped anonymous engagement events for portal
+opens, proposal and section views, PDF downloads, signature interaction, and
+acceptance or rejection actions. Visitor, session, IP, and user-agent values are
+peppered and hashed before persistence; CSV exports contain only shortened
+visitor/session hashes and never include network metadata, portal tokens,
+storage paths, or internal proposal data.
+
+The Proposal Workspace includes deterministic engagement metrics, section
+heatmaps, chronological activity, visitor history, daily/hourly charts, an
+acceptance funnel, sales signals, and CSV export. The organization Dashboard
+adds proposal delivery, view, download, outcome, and average-engagement cards.
+No AI provider is called for these calculations.
+
 ### Rollout checklist
 
 1. Create or select the Supabase project.

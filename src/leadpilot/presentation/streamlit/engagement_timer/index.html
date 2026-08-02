@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"></head>
+<body>
+<script>
+  const started = Date.now();
+  let previous = started;
+  let sequence = 0;
+  const send = (type, payload = {}) => window.parent.postMessage({isStreamlitMessage: true, type, ...payload}, "*");
+  const sample = () => {
+    const now = Date.now();
+    const duration = Math.max(0, Math.min(now - previous, 60000));
+    previous = now;
+    sequence += 1;
+    send("streamlit:setComponentValue", {value: {sequence, duration_ms: duration}});
+  };
+  window.addEventListener("message", event => {
+    if (event.data.type === "streamlit:render") send("streamlit:setFrameHeight", {height: 0});
+  });
+  document.addEventListener("visibilitychange", () => { if (document.hidden) sample(); });
+  window.addEventListener("pagehide", sample);
+  window.setInterval(sample, 15000);
+  send("streamlit:componentReady", {apiVersion: 1});
+  send("streamlit:setFrameHeight", {height: 0});
+</script>
+</body>
+</html>

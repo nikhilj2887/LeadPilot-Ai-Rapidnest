@@ -218,3 +218,28 @@ def test_client_acceptance_migration(tmp_path: Path, monkeypatch) -> None:
     assert "uq_proposal_acceptances_one_accepted" in {
         item["name"] for item in inspector.get_indexes("proposal_acceptances")
     }
+
+
+def test_proposal_engagement_migration(tmp_path: Path, monkeypatch) -> None:
+    database = tmp_path / "proposal-engagement.db"
+    monkeypatch.setenv("LEADPILOT_DATABASE_URL", f"sqlite:///{database}")
+    command.upgrade(Config("alembic.ini"), "head")
+    inspector = inspect(create_engine(f"sqlite:///{database}"))
+    assert "proposal_engagement_events" in inspector.get_table_names()
+    assert {
+        "organization_id",
+        "proposal_id",
+        "portal_link_id",
+        "proposal_document_id",
+        "visitor_id",
+        "session_id",
+        "event_type",
+        "duration_ms",
+        "ip_hash",
+        "user_agent_hash",
+    } <= {
+        column["name"] for column in inspector.get_columns("proposal_engagement_events")
+    }
+    assert "ix_proposal_engagement_timeline" in {
+        item["name"] for item in inspector.get_indexes("proposal_engagement_events")
+    }

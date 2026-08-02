@@ -1001,3 +1001,48 @@ class ProposalAcceptanceModel(Base):
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), index=True
     )
+
+
+class ProposalEngagementEventModel(Base):
+    __tablename__ = "proposal_engagement_events"
+    __table_args__ = (
+        CheckConstraint(
+            "page_number IS NULL OR page_number > 0", name="ck_engagement_page_number"
+        ),
+        CheckConstraint(
+            "duration_ms IS NULL OR (duration_ms >= 0 AND duration_ms <= 86400000)",
+            name="ck_engagement_duration",
+        ),
+        Index(
+            "ix_proposal_engagement_timeline",
+            "organization_id",
+            "proposal_id",
+            "created_at",
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    organization_id: Mapped[int] = mapped_column(
+        ForeignKey("organizations.id", ondelete="CASCADE"), index=True
+    )
+    proposal_id: Mapped[int] = mapped_column(
+        ForeignKey("proposals.id", ondelete="CASCADE"), index=True
+    )
+    portal_link_id: Mapped[int] = mapped_column(
+        ForeignKey("proposal_portal_links.id", ondelete="CASCADE"), index=True
+    )
+    proposal_document_id: Mapped[int | None] = mapped_column(
+        ForeignKey("proposal_documents.id", ondelete="SET NULL")
+    )
+    visitor_id: Mapped[str] = mapped_column(String(64))
+    session_id: Mapped[str] = mapped_column(String(64))
+    event_type: Mapped[str] = mapped_column(String(40), index=True)
+    page_number: Mapped[int | None]
+    section_key: Mapped[str | None] = mapped_column(String(100))
+    duration_ms: Mapped[int | None]
+    metadata_json: Mapped[str] = mapped_column(Text, default="{}")
+    ip_hash: Mapped[str | None] = mapped_column(String(64))
+    user_agent_hash: Mapped[str | None] = mapped_column(String(64))
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), index=True
+    )
