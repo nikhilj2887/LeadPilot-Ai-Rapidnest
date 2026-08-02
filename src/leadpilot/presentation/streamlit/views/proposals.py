@@ -11,6 +11,10 @@ from pydantic import ValidationError
 from leadpilot.application.ai_foundation import AIConfigurationError, AIError
 from leadpilot.application.auth import AuthorizationError
 from leadpilot.application.offering_recommendations import RecommendationError
+from leadpilot.application.proposal_email import (
+    EmailError,
+    ProposalEmailDeliveryStatus,
+)
 from leadpilot.application.proposal_generation import (
     SUPPORTED_SECTION_KEYS,
     ProposalGenerationError,
@@ -155,15 +159,18 @@ def _detail(container: Container, proposal_id: int) -> None:
         f"{proposal.proposal_number} · {proposal.company_name} · "
         f"{proposal.status.value.replace('_', ' ').title()}"
     )
-    summary, items, recommendations, writer, documents, sections, history = st.tabs(
-        (
-            "Summary",
-            "Offerings & pricing",
-            "AI Recommendations",
-            "AI Proposal Writer",
-            "Proposal Documents",
-            "Sections",
-            "Versions & activity",
+    summary, items, recommendations, writer, documents, email, sections, history = (
+        st.tabs(
+            (
+                "Summary",
+                "Offerings & pricing",
+                "AI Recommendations",
+                "AI Proposal Writer",
+                "Proposal Documents",
+                "Email Delivery",
+                "Sections",
+                "Versions & activity",
+            )
         )
     )
     with summary:
@@ -370,6 +377,9 @@ def _detail(container: Container, proposal_id: int) -> None:
     with documents:
         _proposal_documents(container, proposal_id)
 
+    with email:
+        _proposal_email(container, proposal_id)
+
     with history:
         change_summary = st.text_input(
             "Version note", max_chars=500, key=f"version_note_{proposal_id}"
@@ -379,7 +389,6 @@ def _detail(container: Container, proposal_id: int) -> None:
                 lambda: service.create_version(proposal_id, change_summary or None),
                 "Version snapshot created.",
             )
-        st.button("Email proposal", disabled=True)
         for version in service.list_versions(proposal_id):
             st.write(
                 f"Version {version.version_number} · "
@@ -401,6 +410,7 @@ def _mutate(operation: object, message: str) -> None:
         RecommendationError,
         ProposalGenerationError,
         ProposalPdfError,
+        EmailError,
         ProposalValidationError,
         ValidationError,
     ) as exc:
@@ -725,3 +735,169 @@ def _proposal_documents(container: Container, proposal_id: int) -> None:
             hide_index=True,
             width="stretch",
         )
+
+
+def _proposal_email(container: Container, proposal_id: int) -> None:
+    service = container.proposal_email
+    proposal = container.proposals.get_proposal(proposal_id)
+    ready = tuple(
+        document
+        for document in container.proposal_pdf.list_proposal_documents(proposal_id)
+        if document.status == ProposalDocumentStatus.READY
+    )
+    st.subheader("Email Readiness")
+    st.caption(
+        f"{proposal.proposal_number} · {proposal.status.value} · tenant-branded delivery"
+    )
+    if not service.configured:
+        st.warning("Email not configured. Proposal email sending is unavailable.")
+    if not ready:
+        st.warning(
+            "No READY proposal PDF exists. Generate the PDF before composing email."
+        )
+    config = service.configuration
+    if config:
+        st.write(
+            f"Provider: {config.provider.value} · Sender: {config.from_name} <{config.from_address}>"
+        )
+    st.subheader("Compose Email")
+    labels = {
+        document.id: f"{document.file_name} · {(document.file_size_bytes or 0):,} bytes · {document.sha256_checksum[:12] if document.sha256_checksum else 'pending'}"
+        for document in ready
+    }
+    selected = st.selectbox(
+        "Select READY PDF", tuple(labels), format_func=labels.get, disabled=not ready
+    )
+    with st.form(f"proposal_email_compose_{proposal_id}"):
+        to_addresses = st.text_input("To", help="Comma-separated addresses")
+        cc_addresses = st.text_input("CC", help="Optional, comma-separated addresses")
+        bcc_addresses = st.text_input("BCC", help="Optional; masked in preview")
+        subject = st.text_input(
+            "Subject",
+            value=f"Proposal {proposal.proposal_number} – {proposal.title}",
+            max_chars=300,
+        )
+        intro = st.text_area(
+            "Introductory message",
+            value=f"Please find our proposal for {proposal.company_name} attached for your review.",
+            max_chars=5000,
+        )
+        closing = st.text_area(
+            "Closing message",
+            value="Please contact us if you have any questions.",
+            max_chars=5000,
+        )
+        save = st.form_submit_button(
+            "Save draft", disabled=not service.configured or not ready
+        )
+    if save and selected:
+        try:
+            draft = service.create_email_draft(
+                proposal_id,
+                selected,
+                to_addresses=to_addresses,
+                cc_addresses=cc_addresses,
+                bcc_addresses=bcc_addresses,
+                subject=subject,
+                intro_message=intro,
+                closing_message=closing,
+            )
+        except EmailError as exc:
+            st.error(str(exc))
+        else:
+            st.session_state[f"proposal_email_draft_{proposal_id}"] = draft.id
+            st.success("Email draft saved. Review the preview before sending.")
+    delivery_id = st.session_state.get(f"proposal_email_draft_{proposal_id}")
+    if delivery_id:
+        try:
+            preview = service.preview_email_delivery(delivery_id)
+        except EmailError as exc:
+            st.error(str(exc))
+        else:
+            st.subheader("Preview")
+            st.caption(
+                f"From {preview.delivery.from_name} <{preview.delivery.from_address}> · To {', '.join(preview.delivery.recipients.to)} · BCC {', '.join(preview.masked_bcc) or 'None'}"
+            )
+            st.markdown(preview.delivery.html_body, unsafe_allow_html=True)
+            with st.expander("Plain-text preview"):
+                st.text(preview.delivery.text_body)
+            st.caption(
+                f"Attachment: {preview.delivery.attachment_file_name} · {preview.attachment_size:,} bytes · {preview.delivery.attachment_checksum[:12]}"
+            )
+            confirm = st.checkbox(
+                "I confirm the recipients, message, and attached proposal PDF",
+                key=f"email_confirm_{delivery_id}",
+            )
+            if st.button(
+                "Send Proposal",
+                type="primary",
+                disabled=not confirm
+                or preview.delivery.status != ProposalEmailDeliveryStatus.DRAFT,
+            ):
+                _mutate(
+                    lambda: service.send_email_delivery(delivery_id),
+                    "Proposal email delivery completed.",
+                )
+    st.subheader("Delivery History")
+    deliveries = service.list_email_deliveries(proposal_id)
+    if deliveries:
+        st.dataframe(
+            [
+                {
+                    "Delivery": item.id,
+                    "Created": item.created_at,
+                    "Status": item.status.value,
+                    "Provider": item.provider.value,
+                    "Sender": item.from_address,
+                    "To": len(item.recipients.to),
+                    "CC": len(item.recipients.cc),
+                    "BCC": len(item.recipients.bcc),
+                    "Subject": item.subject,
+                    "Attachment": item.attachment_file_name,
+                    "Attempts": item.attempt_count,
+                    "Sent": item.sent_at,
+                    "Message ID": item.provider_message_id,
+                    "Error": item.safe_error_message,
+                }
+                for item in deliveries
+            ],
+            hide_index=True,
+            width="stretch",
+        )
+        latest_delivery = deliveries[0]
+        actions = st.columns(3)
+        if actions[0].button(
+            "Retry Failed Delivery",
+            disabled=latest_delivery.status != ProposalEmailDeliveryStatus.FAILED,
+            key=f"retry_email_{latest_delivery.id}",
+        ):
+            _mutate(
+                lambda: service.retry_email_delivery(latest_delivery.id),
+                "Transient email delivery retried.",
+            )
+        if actions[1].button(
+            "Resend",
+            disabled=latest_delivery.status != ProposalEmailDeliveryStatus.SENT,
+            key=f"resend_email_{latest_delivery.id}",
+        ):
+            try:
+                resend = service.resend_proposal_email(latest_delivery.id)
+            except EmailError as exc:
+                st.error(str(exc))
+            else:
+                st.session_state[f"proposal_email_draft_{proposal_id}"] = resend.id
+                st.success("A new immutable resend draft was created.")
+                st.rerun()
+        if actions[2].button(
+            "Cancel Draft",
+            disabled=latest_delivery.status
+            not in {
+                ProposalEmailDeliveryStatus.DRAFT,
+                ProposalEmailDeliveryStatus.QUEUED,
+            },
+            key=f"cancel_email_{latest_delivery.id}",
+        ):
+            _mutate(
+                lambda: service.cancel_email_delivery(latest_delivery.id),
+                "Email delivery cancelled.",
+            )

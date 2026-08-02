@@ -43,6 +43,19 @@ class Settings:
     document_storage_path: Path = Path(".leadpilot/documents")
     pdf_max_file_size_mb: int = 15
     pdf_logo_max_size_mb: int = 2
+    email_provider: str | None = None
+    email_smtp_host: str | None = None
+    email_smtp_port: int = 587
+    email_smtp_username: str | None = None
+    email_smtp_password: str | None = None
+    email_smtp_use_tls: bool = True
+    email_smtp_use_ssl: bool = False
+    email_from_address: str | None = None
+    email_from_name: str | None = None
+    email_reply_to: str | None = None
+    email_timeout_seconds: int = 30
+    email_max_retries: int = 2
+    email_max_attachment_mb: int = 15
 
     @classmethod
     def from_env(cls, env_file: str | None = ".env") -> Settings:
@@ -139,6 +152,26 @@ class Settings:
             ),
             pdf_max_file_size_mb=int(os.getenv("LEADPILOT_PDF_MAX_FILE_SIZE_MB", "15")),
             pdf_logo_max_size_mb=int(os.getenv("LEADPILOT_PDF_LOGO_MAX_SIZE_MB", "2")),
+            email_provider=os.getenv("LEADPILOT_EMAIL_PROVIDER", "").strip().lower()
+            or None,
+            email_smtp_host=os.getenv("LEADPILOT_EMAIL_SMTP_HOST", "").strip() or None,
+            email_smtp_port=int(os.getenv("LEADPILOT_EMAIL_SMTP_PORT", "587")),
+            email_smtp_username=os.getenv("LEADPILOT_EMAIL_SMTP_USERNAME", "").strip()
+            or None,
+            email_smtp_password=os.getenv("LEADPILOT_EMAIL_SMTP_PASSWORD", "") or None,
+            email_smtp_use_tls=_env_bool("LEADPILOT_EMAIL_SMTP_USE_TLS", True),
+            email_smtp_use_ssl=_env_bool("LEADPILOT_EMAIL_SMTP_USE_SSL", False),
+            email_from_address=os.getenv("LEADPILOT_EMAIL_FROM_ADDRESS", "").strip()
+            or None,
+            email_from_name=os.getenv("LEADPILOT_EMAIL_FROM_NAME", "").strip() or None,
+            email_reply_to=os.getenv("LEADPILOT_EMAIL_REPLY_TO", "").strip() or None,
+            email_timeout_seconds=int(
+                os.getenv("LEADPILOT_EMAIL_TIMEOUT_SECONDS", "30")
+            ),
+            email_max_retries=int(os.getenv("LEADPILOT_EMAIL_MAX_RETRIES", "2")),
+            email_max_attachment_mb=int(
+                os.getenv("LEADPILOT_EMAIL_MAX_ATTACHMENT_MB", "15")
+            ),
         )
 
     @property
@@ -154,3 +187,7 @@ def get_settings() -> Settings:
 def _optional_float(name: str) -> float | None:
     value = os.getenv(name, "").strip()
     return float(value) if value else None
+
+
+def _env_bool(name: str, default: bool) -> bool:
+    return os.getenv(name, str(default)).lower() in {"1", "true", "yes", "on"}

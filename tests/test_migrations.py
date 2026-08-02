@@ -157,3 +157,24 @@ def test_proposal_document_migration(tmp_path: Path, monkeypatch) -> None:
     assert "uq_proposal_documents_storage_key" in {
         item["name"] for item in inspector.get_unique_constraints("proposal_documents")
     }
+
+
+def test_proposal_email_migration(tmp_path: Path, monkeypatch) -> None:
+    database = tmp_path / "proposal-email.db"
+    monkeypatch.setenv("LEADPILOT_DATABASE_URL", f"sqlite:///{database}")
+    command.upgrade(Config("alembic.ini"), "head")
+    inspector = inspect(create_engine(f"sqlite:///{database}"))
+    assert {"email_provider_configs", "proposal_email_deliveries"} <= set(
+        inspector.get_table_names()
+    )
+    assert "uq_proposal_email_deliveries_idempotency" in {
+        item["name"]
+        for item in inspector.get_unique_constraints("proposal_email_deliveries")
+    }
+    assert {
+        "ck_email_provider_configs_port",
+        "ck_email_provider_configs_transport",
+    } <= {
+        item["name"]
+        for item in inspector.get_check_constraints("email_provider_configs")
+    }

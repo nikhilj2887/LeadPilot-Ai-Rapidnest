@@ -24,6 +24,8 @@ APPLICATION_TABLES = (
     "proposal_recommendations",
     "proposal_generation_drafts",
     "proposal_documents",
+    "email_provider_configs",
+    "proposal_email_deliveries",
     "audit_logs",
 )
 

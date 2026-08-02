@@ -27,6 +27,11 @@ from leadpilot.application.offering_recommendations import OfferingRecommendatio
 from leadpilot.application.organizations import OrganizationContext, OrganizationSummary
 from leadpilot.application.prompt_templates import PromptTemplateService
 from leadpilot.application.proposal_context_builder import ProposalContextBuilder
+from leadpilot.application.proposal_email import (
+    EmailProviderName,
+    ProposalEmailService,
+    ProposalEmailTemplateBuilder,
+)
 from leadpilot.application.proposal_generation import ProposalGenerationService
 from leadpilot.application.proposal_pdf import ProposalPdfService
 from leadpilot.application.proposal_pdf_snapshot import ProposalPdfSnapshotBuilder
@@ -42,6 +47,9 @@ from leadpilot.infrastructure.database.ai_foundation_repository import (
 )
 from leadpilot.infrastructure.database.company_repository import CompanyRepository
 from leadpilot.infrastructure.database.discovery_repository import DiscoveryRepository
+from leadpilot.infrastructure.database.email_provider_config_repository import (
+    EmailProviderConfigRepository,
+)
 from leadpilot.infrastructure.database.engine import create_database_engine
 from leadpilot.infrastructure.database.identity_repository import IdentityRepository
 from leadpilot.infrastructure.database.offering_recommendation_repository import (
@@ -56,6 +64,9 @@ from leadpilot.infrastructure.database.prompt_template_repository import (
 from leadpilot.infrastructure.database.proposal_document_repository import (
     ProposalDocumentRepository,
 )
+from leadpilot.infrastructure.database.proposal_email_repository import (
+    ProposalEmailRepository,
+)
 from leadpilot.infrastructure.database.proposal_generation_repository import (
     ProposalGenerationRepository,
 )
@@ -68,6 +79,10 @@ from leadpilot.infrastructure.database.service_catalog_repository import (
 from leadpilot.infrastructure.database.session import create_session_factory
 from leadpilot.infrastructure.discovery_client import WebsiteClient
 from leadpilot.infrastructure.discovery_scanner import WebsiteScanner
+from leadpilot.infrastructure.email_providers import (
+    FakeEmailProvider,
+    SMTPEmailProvider,
+)
 from leadpilot.infrastructure.gemini_provider import GeminiAIProvider
 from leadpilot.infrastructure.pdf.reportlab_proposal_renderer import (
     ReportLabProposalPdfRenderer,
@@ -96,6 +111,7 @@ class Container:
     offering_recommendations: OfferingRecommendationService
     proposal_generation: ProposalGenerationService
     proposal_pdf: ProposalPdfService
+    proposal_email: ProposalEmailService
     identities: IdentityRepository
 
     def dispose(self) -> None:
@@ -208,6 +224,33 @@ def bootstrap(
         intelligence_authorize,
         audit,
     )
+    proposal_pdf_service = ProposalPdfService(
+        ProposalDocumentRepository(session_factory, selected_id),
+        ProposalPdfSnapshotBuilder(
+            proposal_service,
+            company_service,
+            organization_context,
+            organization_repository,
+            user_id,
+        ),
+        ReportLabProposalPdfRenderer(),
+        LocalDocumentStorage(resolved_settings.document_storage_path),
+        selected_id,
+        user_id,
+        company_authorize,
+        audit,
+        resolved_settings.pdf_max_file_size_mb,
+    )
+    email_configuration = EmailProviderConfigRepository(
+        session_factory, selected_id, resolved_settings
+    ).resolve()
+    email_provider = None
+    if email_configuration:
+        if email_configuration.provider == EmailProviderName.SMTP:
+            email_provider = SMTPEmailProvider(email_configuration)
+        elif email_configuration.provider == EmailProviderName.FAKE:
+            email_provider = FakeEmailProvider()
+    branding = organization_repository.get_branding(selected_id)
     return Container(
         settings=resolved_settings,
         engine=engine,
@@ -251,22 +294,20 @@ def bootstrap(
             intelligence_authorize,
             audit,
         ),
-        proposal_pdf=ProposalPdfService(
-            ProposalDocumentRepository(session_factory, selected_id),
-            ProposalPdfSnapshotBuilder(
-                proposal_service,
-                company_service,
-                organization_context,
-                organization_repository,
-                user_id,
-            ),
-            ReportLabProposalPdfRenderer(),
-            LocalDocumentStorage(resolved_settings.document_storage_path),
-            selected_id,
+        proposal_pdf=proposal_pdf_service,
+        proposal_email=ProposalEmailService(
+            ProposalEmailRepository(session_factory, selected_id),
+            proposal_service,
+            proposal_pdf_service,
+            email_provider,
+            email_configuration,
+            ProposalEmailTemplateBuilder(),
+            organization_context.organization,
+            branding,
             user_id,
             company_authorize,
             audit,
-            resolved_settings.pdf_max_file_size_mb,
+            resolved_settings.email_max_attachment_mb,
         ),
         identities=identity_repository,
     )

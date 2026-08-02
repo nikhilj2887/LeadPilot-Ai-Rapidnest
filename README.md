@@ -677,6 +677,49 @@ served directly and storage paths are never shown in the UI. Operators should
 back up the configured document root with the database and apply equivalent
 retention controls to both.
 
+### Proposal email delivery
+
+Proposal email delivery attaches an existing tenant-owned `READY` PDF; it never
+regenerates the document, changes proposal content, recalculates commercial
+values, or calls an AI provider. A deterministic tenant-branded HTML message and
+independently generated plain-text alternative can be previewed before sending.
+To, CC, and BCC addresses are normalized, deduplicated, bounded, and protected
+against header injection. BCC values are masked in previews and omitted from
+visible message headers.
+
+The application depends on an email-provider protocol. SMTP is the first real
+adapter, while automated tests use the deterministic fake provider and require no
+network or credentials. When email is not configured, the application and all
+non-email features remain available and the Proposal Workspace shows a clear
+not-configured state.
+
+Environment fallback configuration:
+
+```bash
+LEADPILOT_EMAIL_PROVIDER=smtp
+LEADPILOT_EMAIL_SMTP_HOST=smtp.example.com
+LEADPILOT_EMAIL_SMTP_PORT=587
+LEADPILOT_EMAIL_SMTP_USERNAME=
+LEADPILOT_EMAIL_SMTP_PASSWORD=
+LEADPILOT_EMAIL_SMTP_USE_TLS=true
+LEADPILOT_EMAIL_SMTP_USE_SSL=false
+LEADPILOT_EMAIL_FROM_ADDRESS=sales@example.com
+LEADPILOT_EMAIL_FROM_NAME="Example Sales"
+LEADPILOT_EMAIL_REPLY_TO=reply@example.com
+LEADPILOT_EMAIL_TIMEOUT_SECONDS=30
+LEADPILOT_EMAIL_MAX_RETRIES=2
+LEADPILOT_EMAIL_MAX_ATTACHMENT_MB=15
+```
+
+Tenant-level active defaults take precedence over platform defaults and the
+environment fallback. Database configuration stores only a secret reference;
+raw SMTP passwords remain in the runtime secret environment. Delivery records
+retain immutable sender, recipient, message, attachment checksum, provider-safe
+metadata, attempts, and status history. Retry is restricted to transient failed
+deliveries and bounded by configuration; resend creates a new record without
+altering the original sent delivery. Public proposal links, open/click tracking,
+webhooks, and client acceptance remain deferred.
+
 ### Rollout checklist
 
 1. Create or select the Supabase project.
