@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <style>
+    body { margin: 0; font-family: sans-serif; color: #111827; }
+    canvas { width: calc(100% - 2px); height: 180px; border: 1px solid #9ca3af; border-radius: 8px; background: white; touch-action: none; }
+    button { margin-top: 8px; border: 1px solid #9ca3af; border-radius: 6px; background: white; padding: 7px 14px; cursor: pointer; }
+  </style>
+</head>
+<body>
+  <canvas id="signature" width="900" height="300" aria-label="Handwritten signature canvas"></canvas>
+  <button id="clear" type="button">Clear signature</button>
+  <script>
+    const canvas = document.getElementById("signature");
+    const context = canvas.getContext("2d");
+    context.lineWidth = 4;
+    context.lineCap = "round";
+    context.strokeStyle = "#111827";
+    let drawing = false;
+    let changed = false;
+    const send = (type, payload = {}) => window.parent.postMessage({isStreamlitMessage: true, type, ...payload}, "*");
+    const point = event => {
+      const box = canvas.getBoundingClientRect();
+      return {x: (event.clientX - box.left) * canvas.width / box.width, y: (event.clientY - box.top) * canvas.height / box.height};
+    };
+    canvas.addEventListener("pointerdown", event => {
+      drawing = true; changed = true; canvas.setPointerCapture(event.pointerId);
+      const p = point(event); context.beginPath(); context.moveTo(p.x, p.y);
+    });
+    canvas.addEventListener("pointermove", event => {
+      if (!drawing) return;
+      const p = point(event); context.lineTo(p.x, p.y); context.stroke();
+    });
+    canvas.addEventListener("pointerup", () => {
+      drawing = false;
+      if (changed) send("streamlit:setComponentValue", {value: canvas.toDataURL("image/png")});
+    });
+    document.getElementById("clear").addEventListener("click", () => {
+      context.clearRect(0, 0, canvas.width, canvas.height); changed = false;
+      send("streamlit:setComponentValue", {value: null});
+    });
+    window.addEventListener("message", event => {
+      if (event.data.type === "streamlit:render") send("streamlit:setFrameHeight", {height: 235});
+    });
+    send("streamlit:componentReady", {apiVersion: 1});
+    send("streamlit:setFrameHeight", {height: 235});
+  </script>
+</body>
+</html>

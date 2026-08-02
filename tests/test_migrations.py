@@ -199,3 +199,22 @@ def test_secure_proposal_portal_migration(tmp_path: Path, monkeypatch) -> None:
         item["name"]
         for item in inspector.get_check_constraints("proposal_portal_links")
     }
+
+
+def test_client_acceptance_migration(tmp_path: Path, monkeypatch) -> None:
+    database = tmp_path / "proposal-acceptance.db"
+    monkeypatch.setenv("LEADPILOT_DATABASE_URL", f"sqlite:///{database}")
+    command.upgrade(Config("alembic.ini"), "head")
+    inspector = inspect(create_engine(f"sqlite:///{database}"))
+    assert "proposal_acceptances" in inspector.get_table_names()
+    assert {
+        "organization_id",
+        "proposal_id",
+        "proposal_portal_link_id",
+        "proposal_document_id",
+        "signed_document_id",
+        "evidence_hash",
+    } <= {column["name"] for column in inspector.get_columns("proposal_acceptances")}
+    assert "uq_proposal_acceptances_one_accepted" in {
+        item["name"] for item in inspector.get_indexes("proposal_acceptances")
+    }

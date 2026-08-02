@@ -11,6 +11,11 @@ from pydantic import ValidationError
 from leadpilot.application.ai_foundation import AIConfigurationError, AIError
 from leadpilot.application.auth import AuthorizationError
 from leadpilot.application.offering_recommendations import RecommendationError
+from leadpilot.application.proposal_acceptance import (
+    ProposalAcceptanceError,
+    ProposalAcceptanceStatus,
+    SignatureType,
+)
 from leadpilot.application.proposal_email import (
     EmailError,
     ProposalEmailDeliveryStatus,
@@ -171,6 +176,7 @@ def _detail(container: Container, proposal_id: int) -> None:
         documents,
         email,
         portal,
+        acceptance,
         sections,
         history,
     ) = st.tabs(
@@ -182,6 +188,7 @@ def _detail(container: Container, proposal_id: int) -> None:
             "Proposal Documents",
             "Email Delivery",
             "Client Portal",
+            "Acceptance",
             "Sections",
             "Versions & activity",
         )
@@ -395,6 +402,9 @@ def _detail(container: Container, proposal_id: int) -> None:
 
     with portal:
         _proposal_portal(container, proposal_id)
+
+    with acceptance:
+        _proposal_acceptance(container, proposal_id)
 
     with history:
         change_summary = st.text_input(
@@ -918,6 +928,65 @@ def _proposal_email(container: Container, proposal_id: int) -> None:
                 lambda: service.cancel_email_delivery(latest_delivery.id),
                 "Email delivery cancelled.",
             )
+
+
+def _proposal_acceptance(container: Container, proposal_id: int) -> None:
+    service = container.proposal_acceptance
+    history = service.list_acceptances(proposal_id)
+    if not history:
+        st.info("No client response has been recorded.")
+        return
+    latest = history[0]
+    st.metric("Status", latest.status.value.title())
+    if latest.status == ProposalAcceptanceStatus.ACCEPTED:
+        st.success("This proposal is accepted and locked against modification.")
+        details = st.columns(2)
+        details[0].write(f"**Accepted by:** {latest.accepted_by_name}")
+        details[0].write(f"**Email:** {latest.accepted_by_email}")
+        details[0].write(f"**Company:** {latest.accepted_by_company}")
+        details[1].write(f"**Title:** {latest.accepted_by_title or '—'}")
+        details[1].write(f"**Accepted:** {latest.accepted_at}")
+        details[1].write(
+            f"**Signature:** {(latest.signature_type or SignatureType.TYPED).value.title()}"
+        )
+        if latest.comments:
+            st.write("**Comments**")
+            st.write(latest.comments)
+        signature = service.read_signature(latest)
+        if signature:
+            st.image(signature, caption="Captured signature", width=420)
+        try:
+            filename, content = service.download_signed_copy(latest)
+        except ProposalAcceptanceError:
+            st.warning("The signed copy is temporarily unavailable.")
+        else:
+            st.download_button(
+                "Download Signed Copy",
+                content,
+                file_name=filename,
+                mime="application/pdf",
+                key=f"signed_copy_{latest.id}",
+            )
+    else:
+        st.warning(f"Rejected on {latest.rejected_at}.")
+        if latest.comments:
+            st.write(latest.comments)
+    st.subheader("Acceptance history")
+    st.dataframe(
+        [
+            {
+                "Status": item.status.value,
+                "Signer": item.accepted_by_name or "—",
+                "Company": item.accepted_by_company or "—",
+                "Accepted": item.accepted_at,
+                "Rejected": item.rejected_at,
+                "Comments": item.comments or "—",
+            }
+            for item in history
+        ],
+        hide_index=True,
+        width="stretch",
+    )
 
 
 def _proposal_portal(container: Container, proposal_id: int) -> None:

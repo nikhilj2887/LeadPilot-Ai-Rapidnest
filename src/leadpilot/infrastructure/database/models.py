@@ -17,6 +17,7 @@ from sqlalchemy import (
     Text,
     UniqueConstraint,
     func,
+    text,
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -935,6 +936,68 @@ class ProposalPortalAccessEventModel(Base):
     user_agent_hash: Mapped[str | None] = mapped_column(String(64))
     session_hash: Mapped[str | None] = mapped_column(String(64))
     safe_metadata_json: Mapped[str | None] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), index=True
+    )
+
+
+class ProposalAcceptanceModel(Base):
+    __tablename__ = "proposal_acceptances"
+    __table_args__ = (
+        CheckConstraint(
+            "status IN ('PENDING', 'ACCEPTED', 'REJECTED')",
+            name="ck_proposal_acceptances_status",
+        ),
+        CheckConstraint(
+            "signature_type IS NULL OR signature_type IN ('TYPED', 'HANDWRITTEN')",
+            name="ck_proposal_acceptances_signature_type",
+        ),
+        Index(
+            "uq_proposal_acceptances_one_accepted",
+            "proposal_id",
+            unique=True,
+            sqlite_where=text("status = 'ACCEPTED'"),
+            postgresql_where=text("status = 'ACCEPTED'"),
+        ),
+        Index(
+            "ix_proposal_acceptances_history",
+            "organization_id",
+            "proposal_id",
+            "created_at",
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    organization_id: Mapped[int] = mapped_column(
+        ForeignKey("organizations.id", ondelete="RESTRICT"), index=True
+    )
+    proposal_id: Mapped[int] = mapped_column(
+        ForeignKey("proposals.id", ondelete="RESTRICT"), index=True
+    )
+    proposal_portal_link_id: Mapped[int] = mapped_column(
+        ForeignKey("proposal_portal_links.id", ondelete="RESTRICT"), index=True
+    )
+    proposal_document_id: Mapped[int] = mapped_column(
+        ForeignKey("proposal_documents.id", ondelete="RESTRICT"), index=True
+    )
+    signed_document_id: Mapped[int | None] = mapped_column(
+        ForeignKey("proposal_documents.id", ondelete="RESTRICT"), index=True
+    )
+    status: Mapped[str] = mapped_column(String(20), index=True)
+    accepted_by_name: Mapped[str | None] = mapped_column(String(200))
+    accepted_by_email: Mapped[str | None] = mapped_column(String(320))
+    accepted_by_company: Mapped[str | None] = mapped_column(String(200))
+    accepted_by_title: Mapped[str | None] = mapped_column(String(200))
+    signature_type: Mapped[str | None] = mapped_column(String(20))
+    typed_signature: Mapped[str | None] = mapped_column(String(200))
+    signature_image_path: Mapped[str | None] = mapped_column(String(500))
+    comments: Mapped[str | None] = mapped_column(Text)
+    client_ip_hash: Mapped[str | None] = mapped_column(String(64))
+    client_user_agent_hash: Mapped[str | None] = mapped_column(String(64))
+    client_session_hash: Mapped[str | None] = mapped_column(String(64))
+    evidence_hash: Mapped[str | None] = mapped_column(String(64), index=True)
+    accepted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    rejected_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), index=True
     )
