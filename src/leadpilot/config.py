@@ -56,6 +56,13 @@ class Settings:
     email_timeout_seconds: int = 30
     email_max_retries: int = 2
     email_max_attachment_mb: int = 15
+    portal_token_pepper: str = "leadpilot-development-portal-pepper"
+    portal_metadata_hash_pepper: str = "leadpilot-development-metadata-pepper"
+    portal_record_access_events: bool = True
+    portal_rate_limit_attempts: int = 20
+    portal_rate_limit_window_seconds: int = 300
+    portal_password_max_attempts: int = 5
+    portal_password_lock_minutes: int = 15
 
     @classmethod
     def from_env(cls, env_file: str | None = ".env") -> Settings:
@@ -171,6 +178,29 @@ class Settings:
             email_max_retries=int(os.getenv("LEADPILOT_EMAIL_MAX_RETRIES", "2")),
             email_max_attachment_mb=int(
                 os.getenv("LEADPILOT_EMAIL_MAX_ATTACHMENT_MB", "15")
+            ),
+            portal_token_pepper=os.getenv(
+                "LEADPILOT_PORTAL_TOKEN_PEPPER",
+                "leadpilot-development-portal-pepper",
+            ),
+            portal_metadata_hash_pepper=os.getenv(
+                "LEADPILOT_PORTAL_METADATA_HASH_PEPPER",
+                "leadpilot-development-metadata-pepper",
+            ),
+            portal_record_access_events=_env_bool(
+                "LEADPILOT_PORTAL_RECORD_ACCESS_EVENTS", True
+            ),
+            portal_rate_limit_attempts=int(
+                os.getenv("LEADPILOT_PORTAL_RATE_LIMIT_ATTEMPTS", "20")
+            ),
+            portal_rate_limit_window_seconds=int(
+                os.getenv("LEADPILOT_PORTAL_RATE_LIMIT_WINDOW_SECONDS", "300")
+            ),
+            portal_password_max_attempts=int(
+                os.getenv("LEADPILOT_PORTAL_PASSWORD_MAX_ATTEMPTS", "5")
+            ),
+            portal_password_lock_minutes=int(
+                os.getenv("LEADPILOT_PORTAL_PASSWORD_LOCK_MINUTES", "15")
             ),
         )
 

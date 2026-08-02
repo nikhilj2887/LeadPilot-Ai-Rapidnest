@@ -22,6 +22,10 @@ from leadpilot.application.proposal_generation import (
     ProposalTone,
 )
 from leadpilot.application.proposal_pdf import ProposalDocumentStatus, ProposalPdfError
+from leadpilot.application.proposal_portal import (
+    ProposalPortalError,
+    ProposalPortalLinkStatus,
+)
 from leadpilot.application.proposals import (
     TRANSITIONS,
     ProposalFilters,
@@ -159,18 +163,27 @@ def _detail(container: Container, proposal_id: int) -> None:
         f"{proposal.proposal_number} · {proposal.company_name} · "
         f"{proposal.status.value.replace('_', ' ').title()}"
     )
-    summary, items, recommendations, writer, documents, email, sections, history = (
-        st.tabs(
-            (
-                "Summary",
-                "Offerings & pricing",
-                "AI Recommendations",
-                "AI Proposal Writer",
-                "Proposal Documents",
-                "Email Delivery",
-                "Sections",
-                "Versions & activity",
-            )
+    (
+        summary,
+        items,
+        recommendations,
+        writer,
+        documents,
+        email,
+        portal,
+        sections,
+        history,
+    ) = st.tabs(
+        (
+            "Summary",
+            "Offerings & pricing",
+            "AI Recommendations",
+            "AI Proposal Writer",
+            "Proposal Documents",
+            "Email Delivery",
+            "Client Portal",
+            "Sections",
+            "Versions & activity",
         )
     )
     with summary:
@@ -380,6 +393,9 @@ def _detail(container: Container, proposal_id: int) -> None:
     with email:
         _proposal_email(container, proposal_id)
 
+    with portal:
+        _proposal_portal(container, proposal_id)
+
     with history:
         change_summary = st.text_input(
             "Version note", max_chars=500, key=f"version_note_{proposal_id}"
@@ -410,6 +426,7 @@ def _mutate(operation: object, message: str) -> None:
         RecommendationError,
         ProposalGenerationError,
         ProposalPdfError,
+        ProposalPortalError,
         EmailError,
         ProposalValidationError,
         ValidationError,
@@ -900,4 +917,167 @@ def _proposal_email(container: Container, proposal_id: int) -> None:
             _mutate(
                 lambda: service.cancel_email_delivery(latest_delivery.id),
                 "Email delivery cancelled.",
+            )
+
+
+def _proposal_portal(container: Container, proposal_id: int) -> None:
+    service = container.proposal_portal
+    proposal = container.proposals.get_proposal(proposal_id)
+    documents = tuple(
+        document
+        for document in container.proposal_pdf.list_proposal_documents(proposal_id)
+        if document.status == ProposalDocumentStatus.READY
+    )
+    links = service.list_portal_links(proposal_id)
+    active = tuple(
+        link for link in links if link.status == ProposalPortalLinkStatus.ACTIVE
+    )
+    sections = tuple(
+        section
+        for section in container.proposals.list_sections(proposal_id)
+        if section.is_enabled and section.content.strip()
+    )
+    st.subheader("Portal Readiness")
+    st.caption(
+        f"{proposal.proposal_number} · {len(documents)} READY PDFs · "
+        f"{len(sections)} client-facing sections · {len(active)} active links"
+    )
+    if not documents:
+        st.warning("No READY proposal PDF exists. Generate one before creating a link.")
+    branding = container.organizations.get_branding(
+        container.organization_context.organization_id
+    )
+    if not branding:
+        st.warning("Tenant branding is incomplete; a safe text fallback will be used.")
+    if not sections:
+        st.warning("No client-facing narrative sections are enabled.")
+    st.subheader("Create Portal Link")
+    labels = {
+        item.id: f"{item.file_name} · {(item.file_size_bytes or 0):,} bytes · "
+        f"{item.sha256_checksum[:12] if item.sha256_checksum else 'unavailable'}"
+        for item in documents
+    }
+    with st.form(f"portal_link_{proposal_id}"):
+        document_id = st.selectbox(
+            "Linked READY PDF",
+            tuple(labels),
+            format_func=labels.get,
+            disabled=not documents,
+        )
+        expiry = st.date_input("Expiry date", value=proposal.valid_until)
+        protect = st.checkbox("Require password")
+        password = st.text_input(
+            "Portal password",
+            type="password",
+            disabled=not protect,
+            max_chars=256,
+        )
+        max_access = st.number_input(
+            "Maximum successful views (0 means unlimited)",
+            min_value=0,
+            max_value=100000,
+            value=0,
+        )
+        allow_download = st.checkbox("Allow PDF download", value=True)
+        show_pricing = st.checkbox("Show pricing", value=True)
+        create = st.form_submit_button("Create Draft Link", disabled=not documents)
+    if create and document_id:
+        try:
+            expires_at = datetime.combine(expiry, datetime.max.time(), tzinfo=UTC)
+            created = service.create_portal_link(
+                proposal_id,
+                document_id,
+                expires_at=expires_at,
+                password=password if protect else None,
+                max_access_count=int(max_access) or None,
+                allow_pdf_download=allow_download,
+                show_pricing=show_pricing,
+            )
+        except ProposalPortalError as exc:
+            st.error(str(exc))
+        else:
+            st.success(
+                "Draft link created. This public token is shown only once and cannot be recovered."
+            )
+            st.code(f"?portal_token={created.raw_token}", language=None)
+            links = service.list_portal_links(proposal_id)
+    st.subheader("Active Link")
+    if active:
+        latest_active = active[0]
+        st.write(
+            f"Token {latest_active.token_prefix}… · {latest_active.access_count} views · "
+            f"Expires {latest_active.expires_at or 'Never'}"
+        )
+        actions = st.columns(3)
+        if actions[0].button("Revoke", key=f"portal_revoke_{latest_active.id}"):
+            _mutate(
+                lambda: service.revoke_portal_link(latest_active.id),
+                "Portal link revoked.",
+            )
+        if actions[1].button("Regenerate", key=f"portal_regenerate_{latest_active.id}"):
+            try:
+                regenerated = service.regenerate_portal_link(latest_active.id)
+            except ProposalPortalError as exc:
+                st.error(str(exc))
+            else:
+                st.success("Replacement draft created; its token is shown only once.")
+                st.code(f"?portal_token={regenerated.raw_token}", language=None)
+        if actions[2].button("Supersede", key=f"portal_supersede_{latest_active.id}"):
+            _mutate(
+                lambda: service.supersede_portal_link(latest_active.id),
+                "Portal link superseded.",
+            )
+    else:
+        st.info("No active public portal link exists.")
+    drafts = tuple(
+        link for link in links if link.status == ProposalPortalLinkStatus.DRAFT
+    )
+    if drafts and st.button("Activate Latest Draft Link"):
+        _mutate(
+            lambda: service.activate_portal_link(drafts[0].id),
+            "Portal link activated.",
+        )
+    st.subheader("Link History")
+    if links:
+        st.dataframe(
+            [
+                {
+                    "Link": link.id,
+                    "Token": f"{link.token_prefix}…",
+                    "Status": link.status.value,
+                    "Created": link.created_at,
+                    "Activated": link.activated_at,
+                    "Expires": link.expires_at,
+                    "Password": link.password_required,
+                    "Views": link.access_count,
+                    "Maximum": link.max_access_count,
+                    "Download": link.allow_pdf_download,
+                    "Pricing": link.show_pricing,
+                    "Last access": link.last_accessed_at,
+                }
+                for link in links
+            ],
+            hide_index=True,
+            width="stretch",
+        )
+        selected_link = st.selectbox(
+            "Access history for",
+            tuple(link.id for link in links),
+            format_func=lambda value: f"Link {value}",
+        )
+        events = service.get_access_history(selected_link)
+        if events:
+            st.dataframe(
+                [
+                    {
+                        "Date": event.created_at,
+                        "Event": event.event_type.value,
+                        "Result": event.access_result.value,
+                        "Request": (event.session_hash or event.ip_hash or "")[:12],
+                        "Metadata": event.safe_metadata,
+                    }
+                    for event in events
+                ],
+                hide_index=True,
+                width="stretch",
             )
