@@ -26,6 +26,7 @@ from leadpilot.application.health import HealthCheckService
 from leadpilot.application.offering_recommendations import OfferingRecommendationService
 from leadpilot.application.organizations import OrganizationContext, OrganizationSummary
 from leadpilot.application.prompt_templates import PromptTemplateService
+from leadpilot.application.proposal_acceptance import ProposalAcceptanceService
 from leadpilot.application.proposal_context_builder import ProposalContextBuilder
 from leadpilot.application.proposal_email import (
     EmailProviderName,
@@ -66,6 +67,9 @@ from leadpilot.infrastructure.database.organization_repository import (
 from leadpilot.infrastructure.database.prompt_template_repository import (
     SqlAlchemyPromptTemplateRepository,
 )
+from leadpilot.infrastructure.database.proposal_acceptance_repository import (
+    ProposalAcceptanceRepository,
+)
 from leadpilot.infrastructure.database.proposal_document_repository import (
     ProposalDocumentRepository,
 )
@@ -92,6 +96,9 @@ from leadpilot.infrastructure.email_providers import (
     SMTPEmailProvider,
 )
 from leadpilot.infrastructure.gemini_provider import GeminiAIProvider
+from leadpilot.infrastructure.pdf.reportlab_acceptance_renderer import (
+    ReportLabSignedAcceptanceRenderer,
+)
 from leadpilot.infrastructure.pdf.reportlab_proposal_renderer import (
     ReportLabProposalPdfRenderer,
 )
@@ -121,6 +128,7 @@ class Container:
     proposal_pdf: ProposalPdfService
     proposal_email: ProposalEmailService
     proposal_portal: ProposalPortalManagementService
+    proposal_acceptance: ProposalAcceptanceService
     identities: IdentityRepository
 
     def dispose(self) -> None:
@@ -260,6 +268,8 @@ def bootstrap(
         elif email_configuration.provider == EmailProviderName.FAKE:
             email_provider = FakeEmailProvider()
     branding = organization_repository.get_branding(selected_id)
+    portal_repository = ProposalPortalRepository(session_factory, selected_id)
+    document_storage = LocalDocumentStorage(resolved_settings.document_storage_path)
     return Container(
         settings=resolved_settings,
         engine=engine,
@@ -319,7 +329,7 @@ def bootstrap(
             resolved_settings.email_max_attachment_mb,
         ),
         proposal_portal=ProposalPortalManagementService(
-            ProposalPortalRepository(session_factory, selected_id),
+            portal_repository,
             proposal_service,
             proposal_pdf_service,
             resolved_settings.portal_token_pepper,
@@ -327,23 +337,39 @@ def bootstrap(
             company_authorize,
             audit,
         ),
+        proposal_acceptance=ProposalAcceptanceService(
+            ProposalAcceptanceRepository(session_factory, selected_id),
+            portal_repository,
+            lambda _organization_id: proposal_pdf_service,
+            document_storage,
+            ReportLabSignedAcceptanceRenderer(),
+            resolved_settings.portal_metadata_hash_pepper,
+            audit,
+        ),
         identities=identity_repository,
     )
 
 
+@dataclass(frozen=True, slots=True)
+class PublicPortalContainer:
+    portal: ProposalPortalAccessService
+    acceptance: ProposalAcceptanceService
+
+
 def bootstrap_public_portal(
     settings: Settings | None = None,
-) -> ProposalPortalAccessService:
+) -> PublicPortalContainer:
     """Build the isolated public-token access boundary without internal navigation."""
     resolved = settings or get_settings()
     engine = create_database_engine(resolved.database_url)
     factory = create_session_factory(engine)
     repository = ProposalPortalRepository(factory, None)
-    return ProposalPortalAccessService(
+    pdf_factory = lambda organization_id: (
+        bootstrap(resolved, organization_id=organization_id).proposal_pdf
+    )
+    portal = ProposalPortalAccessService(
         repository,
-        lambda organization_id: (
-            bootstrap(resolved, organization_id=organization_id).proposal_pdf
-        ),
+        pdf_factory,
         resolved.portal_token_pepper,
         resolved.portal_metadata_hash_pepper,
         PortalRateLimiter(
@@ -353,6 +379,17 @@ def bootstrap_public_portal(
         resolved.portal_record_access_events,
         resolved.portal_password_max_attempts,
         resolved.pdf_max_file_size_mb,
+    )
+    return PublicPortalContainer(
+        portal,
+        ProposalAcceptanceService(
+            ProposalAcceptanceRepository(factory, None),
+            repository,
+            pdf_factory,
+            LocalDocumentStorage(resolved.document_storage_path),
+            ReportLabSignedAcceptanceRenderer(),
+            resolved.portal_metadata_hash_pepper,
+        ),
     )
 
 

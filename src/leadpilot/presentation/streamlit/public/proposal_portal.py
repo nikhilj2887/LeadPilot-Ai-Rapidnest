@@ -1,7 +1,15 @@
 from __future__ import annotations
 
+import uuid
+
 import streamlit as st
 
+from leadpilot.application.proposal_acceptance import (
+    AcceptanceSubmission,
+    ProposalAcceptanceError,
+    ProposalAcceptanceStatus,
+    SignatureType,
+)
 from leadpilot.application.proposal_portal import (
     PortalDownloadDisabledError,
     PortalLinkExpiredError,
@@ -13,6 +21,7 @@ from leadpilot.application.proposal_portal import (
     ProposalPortalError,
 )
 from leadpilot.bootstrap import bootstrap_public_portal
+from leadpilot.presentation.streamlit.components_signature import signature_pad
 
 
 def render() -> None:
@@ -37,7 +46,8 @@ def render() -> None:
     if not token:
         _unavailable("Proposal unavailable")
         return
-    service = bootstrap_public_portal()
+    services = bootstrap_public_portal()
+    service = services.portal
     context = st.session_state.get("public_portal_context")
     if context is not None and not service.context_matches_token(context, token):
         st.session_state.pop("public_portal_context", None)
@@ -52,7 +62,7 @@ def render() -> None:
     except ProposalPortalError:
         _unavailable("Proposal unavailable")
         return
-    _proposal(view, service, context)
+    _proposal(view, service, services.acceptance, context)
 
 
 def _resolve(service: object, token: str):
@@ -81,7 +91,9 @@ def _resolve(service: object, token: str):
     return None
 
 
-def _proposal(view: object, service: object, context: object) -> None:
+def _proposal(
+    view: object, service: object, acceptance_service: object, context: object
+) -> None:
     branding = view.branding  # type: ignore[attr-defined]
     proposal = view.proposal  # type: ignore[attr-defined]
     company = view.company  # type: ignore[attr-defined]
@@ -143,6 +155,114 @@ def _proposal(view: object, service: object, context: object) -> None:
         st.caption(str(branding["proposal_footer"]))
     if view.expires_at:  # type: ignore[attr-defined]
         st.caption(f"Secure link expires {view.expires_at}")  # type: ignore[attr-defined]
+    _acceptance(acceptance_service, context)
+
+
+def _acceptance(service: object, context: object) -> None:
+    existing = service.get_for_portal(context)  # type: ignore[attr-defined]
+    if existing and existing.status == ProposalAcceptanceStatus.ACCEPTED:
+        st.success(
+            f"Accepted on {existing.accepted_at} by {existing.accepted_by_name}."
+        )
+        try:
+            filename, content = service.download_signed_copy(existing)  # type: ignore[attr-defined]
+        except ProposalAcceptanceError:
+            st.info("Signed copy is temporarily unavailable.")
+        else:
+            st.download_button(
+                "Download Signed Copy",
+                content,
+                file_name=filename,
+                mime="application/pdf",
+            )
+        return
+    if existing and existing.status == ProposalAcceptanceStatus.REJECTED:
+        st.error("This proposal was declined. The response has been recorded.")
+        return
+    st.divider()
+    st.header("Respond to proposal")
+    accept_tab, reject_tab = st.tabs(("Accept Proposal", "Reject Proposal"))
+    with accept_tab:
+        legal_name = st.text_input("Legal name", max_chars=200)
+        email = st.text_input("Business email", max_chars=320)
+        company = st.text_input("Company", max_chars=200)
+        title = st.text_input("Title", max_chars=200)
+        comments = st.text_area("Comments (optional)", max_chars=5000)
+        signature_type = st.radio(
+            "Signature method",
+            (SignatureType.TYPED, SignatureType.HANDWRITTEN),
+            format_func=lambda item: item.value.title(),
+            horizontal=True,
+        )
+        typed_signature = None
+        signature_png = None
+        if signature_type == SignatureType.TYPED:
+            typed_signature = st.text_input("Type your legal name as signature")
+        else:
+            st.caption("Draw your signature in the canvas below.")
+            signature_png = signature_pad(key="public_acceptance_signature")
+        authorized = st.checkbox("I confirm I am authorized to accept this proposal.")
+        if st.button("Submit Acceptance", type="primary", disabled=not authorized):
+            ip_address, user_agent = _request_metadata()
+            try:
+                accepted = service.accept_proposal(  # type: ignore[attr-defined]
+                    context,
+                    AcceptanceSubmission(
+                        legal_name,
+                        email,
+                        company,
+                        title,
+                        comments,
+                        signature_type,
+                        typed_signature,
+                        signature_png,
+                        authorized,
+                    ),
+                    ip_address=ip_address,
+                    user_agent=user_agent,
+                    session_identifier=_public_session_identifier(),
+                )
+            except ProposalAcceptanceError as exc:
+                st.error(str(exc))
+            else:
+                st.session_state.public_acceptance_complete = accepted.id
+                st.rerun()
+    with reject_tab:
+        reason = st.text_area("Reason (optional)", max_chars=5000)
+        reject_confirm = st.checkbox(
+            "I confirm I want to reject this proposal.", key="reject_confirm"
+        )
+        if st.button("Reject Proposal", disabled=not reject_confirm):
+            ip_address, user_agent = _request_metadata()
+            try:
+                service.reject_proposal(  # type: ignore[attr-defined]
+                    context,
+                    reason,
+                    ip_address=ip_address,
+                    user_agent=user_agent,
+                    session_identifier=_public_session_identifier(),
+                )
+            except ProposalAcceptanceError as exc:
+                st.error(str(exc))
+            else:
+                st.rerun()
+
+
+def _public_session_identifier() -> str:
+    if "public_acceptance_session" not in st.session_state:
+        st.session_state.public_acceptance_session = uuid.uuid4().hex
+    return str(st.session_state.public_acceptance_session)
+
+
+def _request_metadata() -> tuple[str | None, str | None]:
+    """Return transient request metadata; the application hashes it before storage."""
+    headers = getattr(st.context, "headers", {})
+    forwarded = str(headers.get("X-Forwarded-For", ""))
+    ip_address = forwarded.split(",", maxsplit=1)[0].strip()
+    if not ip_address:
+        ip_address = str(headers.get("X-Real-IP", "")).strip()
+    user_agent = str(headers.get("User-Agent", "")).strip()
+    return ip_address or None, user_agent or None
 
 
 def _unavailable(title: str) -> None:

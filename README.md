@@ -756,11 +756,21 @@ provider metadata, database identifiers, and storage details. Access history
 stores only peppered request hashes and allow-listed event metadata—never raw IP
 addresses, user agents, tokens, passwords, or cookies.
 
+Clients can accept or reject an active portal proposal. Acceptance requires the
+signer's legal name, business identity, an authorization confirmation, and
+either a matching typed signature or a non-empty PNG captured by the local HTML
+canvas. The application stores only peppered request hashes, immutable evidence,
+the optional PNG, and a signed PDF that combines the original proposal with a
+tenant-branded acceptance appendix. Accepted proposals cannot be edited,
+repriced, regenerated with AI, or deleted. The Proposal Workspace Acceptance
+section exposes the response history and signed-copy download to authorized
+tenant users without revealing storage paths.
+
 The initial limiter is process-local and suitable for the current single-process
 architecture and deterministic tests. Production deployments with multiple
 workers should add gateway- or Redis-backed distributed limits, TLS, secure
-secret management, and a dedicated public hostname. Acceptance, rejection,
-e-signatures, comments, client accounts, tracking analytics, and custom domains
+secret management, and a dedicated public hostname. Client accounts, tracking
+analytics, identity verification, multi-party signatures, and custom domains
 remain deferred.
 
 ### Rollout checklist
