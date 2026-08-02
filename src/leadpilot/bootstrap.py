@@ -20,6 +20,7 @@ from leadpilot.application.auth import (
     OrganizationRole,
 )
 from leadpilot.application.companies import CompanyService
+from leadpilot.application.crm import CrmService
 from leadpilot.application.discovery import DiscoveryService
 from leadpilot.application.discovery_ai import DiscoveryAIService
 from leadpilot.application.health import HealthCheckService
@@ -53,6 +54,7 @@ from leadpilot.infrastructure.database.ai_foundation_repository import (
     AIFoundationRepository,
 )
 from leadpilot.infrastructure.database.company_repository import CompanyRepository
+from leadpilot.infrastructure.database.crm_repository import SqlAlchemyCrmRepository
 from leadpilot.infrastructure.database.discovery_repository import DiscoveryRepository
 from leadpilot.infrastructure.database.email_provider_config_repository import (
     EmailProviderConfigRepository,
@@ -120,6 +122,7 @@ class Container:
     organization_context: OrganizationContext
     organizations: OrganizationRepository
     companies: CompanyService
+    crm: CrmService
     service_catalog: ServiceCatalogService
     proposals: ProposalService
     discovery: DiscoveryService
@@ -283,6 +286,14 @@ def bootstrap(
         organization_context=organization_context,
         organizations=organization_repository,
         companies=company_service,
+        crm=CrmService(
+            SqlAlchemyCrmRepository(session_factory, selected_id),
+            user_id,
+            lambda: require(OrganizationRole.VIEWER),
+            lambda: require(OrganizationRole.ANALYST),
+            lambda: require(OrganizationRole.MANAGER),
+            audit,
+        ),
         service_catalog=catalog_service,
         proposals=proposal_service,
         discovery=discovery_service,
