@@ -243,3 +243,31 @@ def test_proposal_engagement_migration(tmp_path: Path, monkeypatch) -> None:
     assert "ix_proposal_engagement_timeline" in {
         item["name"] for item in inspector.get_indexes("proposal_engagement_events")
     }
+
+
+def test_crm_foundation_migration(tmp_path: Path, monkeypatch) -> None:
+    database = tmp_path / "crm-foundation.db"
+    monkeypatch.setenv("LEADPILOT_DATABASE_URL", f"sqlite:///{database}")
+    command.upgrade(Config("alembic.ini"), "head")
+    inspector = inspect(create_engine(f"sqlite:///{database}"))
+    tables = {
+        "contacts",
+        "leads",
+        "pipeline_stages",
+        "opportunities",
+        "crm_activities",
+        "crm_tasks",
+        "crm_notes",
+        "crm_stage_history",
+        "crm_assignment_history",
+    }
+    assert tables <= set(inspector.get_table_names())
+    assert "opportunity_id" in {
+        column["name"] for column in inspector.get_columns("proposals")
+    }
+    assert "uq_leads_org_number" in {
+        item["name"] for item in inspector.get_unique_constraints("leads")
+    }
+    assert "ck_opportunities_probability" in {
+        item["name"] for item in inspector.get_check_constraints("opportunities")
+    }

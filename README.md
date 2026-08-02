@@ -788,6 +788,30 @@ acceptance funnel, sales signals, and CSV export. The organization Dashboard
 adds proposal delivery, view, download, outcome, and average-engagement cards.
 No AI provider is called for these calculations.
 
+### CRM foundation
+
+The protected CRM workspace connects tenant-owned companies to contacts, leads,
+opportunities, activities, tasks, notes, proposals, and a chronological sales
+timeline. Leads follow explicit lifecycle transitions and use deterministic
+profile, contact, and discovery evidence scoring; no AI scoring is used.
+Qualified company-linked leads can be converted transactionally into
+opportunities without deleting their history.
+
+Each organization receives its own configurable pipeline stages, sequential
+`LEAD-YYYY-NNNN` and `OPP-YYYY-NNNN` identifiers, assignment and stage history,
+and weighted pipeline calculations using decimal money values. Viewer access is
+read-only, Analyst access permits routine CRM updates, Manager access permits
+assignment, conversion, imports, and opportunity movement, and higher roles
+inherit those capabilities.
+
+CSV lead import provides validation and preview before mutation, bounded file
+and row sizes, row-level errors, and spreadsheet-formula neutralization. CRM CSV
+exports omit internal identifiers and apply the same formula protection. Every
+repository query and relationship validation is organization-bound; cross-tenant
+contacts, companies, users, leads, opportunities, proposals, and stages are
+rejected. Advanced automation, integrations, forecasting AI, sequences,
+territories, billing, and onboarding remain deferred.
+
 ### Rollout checklist
 
 1. Create or select the Supabase project.

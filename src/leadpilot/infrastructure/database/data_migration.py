@@ -30,6 +30,15 @@ APPLICATION_TABLES = (
     "proposal_portal_access_events",
     "proposal_acceptances",
     "proposal_engagement_events",
+    "contacts",
+    "pipeline_stages",
+    "leads",
+    "opportunities",
+    "crm_activities",
+    "crm_tasks",
+    "crm_notes",
+    "crm_stage_history",
+    "crm_assignment_history",
     "audit_logs",
 )
 

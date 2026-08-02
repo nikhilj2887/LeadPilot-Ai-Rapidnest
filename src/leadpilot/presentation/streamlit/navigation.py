@@ -10,6 +10,7 @@ from leadpilot.application.auth import (
 from leadpilot.bootstrap import Container
 from leadpilot.presentation.streamlit.views import (
     companies,
+    crm,
     dashboard,
     discovery,
     proposals,
@@ -22,6 +23,7 @@ PageRenderer = Callable[[Container], None]
 PAGE_ICONS = {
     "Dashboard": "Home",
     "Companies": "Companies",
+    "CRM": "CRM",
     "Discovery": "Discovery",
     "Service Catalog": "Service Catalog",
     "Proposals": "Proposals",
@@ -33,6 +35,7 @@ PAGE_ICONS = {
 PAGES: dict[str, PageRenderer] = {
     "Dashboard": dashboard.render,
     "Companies": companies.render,
+    "CRM": crm.render,
     "Discovery": discovery.render,
     "Service Catalog": service_catalog.render,
     "Proposals": proposals.render,
