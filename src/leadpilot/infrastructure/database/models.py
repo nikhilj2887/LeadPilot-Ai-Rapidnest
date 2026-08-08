@@ -1404,3 +1404,268 @@ class CrmAssignmentHistoryModel(Base):
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )
+
+
+class SalesIntelligenceConfigModel(Base):
+    __tablename__ = "sales_intelligence_configs"
+    __table_args__ = (
+        CheckConstraint("lead_priority_threshold BETWEEN 0 AND 100"),
+        CheckConstraint("opportunity_risk_threshold BETWEEN 0 AND 100"),
+        UniqueConstraint("organization_id", name="uq_sales_intelligence_config_org"),
+    )
+    id: Mapped[int] = mapped_column(primary_key=True)
+    organization_id: Mapped[int] = mapped_column(
+        ForeignKey("organizations.id", ondelete="CASCADE"), index=True
+    )
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    default_forecast_method: Mapped[str] = mapped_column(
+        String(30), default="STAGE_WEIGHTED"
+    )
+    stale_lead_days: Mapped[int] = mapped_column(Integer, default=14)
+    stale_opportunity_days: Mapped[int] = mapped_column(Integer, default=21)
+    weights_json: Mapped[str] = mapped_column(Text, default="{}")
+    lead_priority_threshold: Mapped[int] = mapped_column(Integer, default=60)
+    opportunity_risk_threshold: Mapped[int] = mapped_column(Integer, default=40)
+    high_health_threshold: Mapped[int] = mapped_column(Integer, default=80)
+    medium_health_threshold: Mapped[int] = mapped_column(Integer, default=60)
+    low_health_threshold: Mapped[int] = mapped_column(Integer, default=40)
+    forecast_commit_threshold: Mapped[int] = mapped_column(Integer, default=75)
+    forecast_best_case_threshold: Mapped[int] = mapped_column(Integer, default=50)
+    default_forecast_horizon_days: Mapped[int] = mapped_column(Integer, default=90)
+    created_by_user_id: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL")
+    )
+    updated_by_user_id: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL")
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+
+
+class LeadIntelligenceScoreModel(Base):
+    __tablename__ = "lead_intelligence_scores"
+    __table_args__ = (CheckConstraint("score BETWEEN 0 AND 100"),)
+    id: Mapped[int] = mapped_column(primary_key=True)
+    organization_id: Mapped[int] = mapped_column(
+        ForeignKey("organizations.id", ondelete="CASCADE"), index=True
+    )
+    lead_id: Mapped[int] = mapped_column(
+        ForeignKey("leads.id", ondelete="CASCADE"), index=True
+    )
+    score: Mapped[int] = mapped_column(Integer, index=True)
+    priority_band: Mapped[str] = mapped_column(String(20), index=True)
+    score_breakdown_json: Mapped[str] = mapped_column(Text)
+    risk_flags_json: Mapped[str] = mapped_column(Text)
+    recommended_follow_up_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True)
+    )
+    source_snapshot_hash: Mapped[str] = mapped_column(String(64), index=True)
+    calculated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True)
+    calculated_by_user_id: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL")
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+
+
+class OpportunityHealthScoreModel(Base):
+    __tablename__ = "opportunity_health_scores"
+    __table_args__ = (CheckConstraint("health_score BETWEEN 0 AND 100"),)
+    id: Mapped[int] = mapped_column(primary_key=True)
+    organization_id: Mapped[int] = mapped_column(
+        ForeignKey("organizations.id", ondelete="CASCADE"), index=True
+    )
+    opportunity_id: Mapped[int] = mapped_column(
+        ForeignKey("opportunities.id", ondelete="CASCADE"), index=True
+    )
+    health_score: Mapped[int] = mapped_column(Integer, index=True)
+    health_band: Mapped[str] = mapped_column(String(20), index=True)
+    risk_level: Mapped[str] = mapped_column(String(20), index=True)
+    score_breakdown_json: Mapped[str] = mapped_column(Text)
+    risk_flags_json: Mapped[str] = mapped_column(Text)
+    recommended_action: Mapped[str | None] = mapped_column(String(500))
+    source_snapshot_hash: Mapped[str] = mapped_column(String(64), index=True)
+    calculated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True)
+    calculated_by_user_id: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL")
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+
+
+class SalesRecommendationModel(Base):
+    __tablename__ = "sales_recommendations"
+    __table_args__ = (
+        UniqueConstraint(
+            "organization_id",
+            "entity_type",
+            "entity_id",
+            "recommendation_type",
+            "source_snapshot_hash",
+            name="uq_sales_recommendation_source",
+        ),
+    )
+    id: Mapped[int] = mapped_column(primary_key=True)
+    organization_id: Mapped[int] = mapped_column(
+        ForeignKey("organizations.id", ondelete="CASCADE"), index=True
+    )
+    entity_type: Mapped[str] = mapped_column(String(20), index=True)
+    entity_id: Mapped[int] = mapped_column(Integer, index=True)
+    recommendation_type: Mapped[str] = mapped_column(String(40), index=True)
+    status: Mapped[str] = mapped_column(
+        String(20), default="PENDING_REVIEW", index=True
+    )
+    priority: Mapped[str] = mapped_column(String(20), index=True)
+    title: Mapped[str] = mapped_column(String(300))
+    description: Mapped[str] = mapped_column(Text)
+    reasoning_json: Mapped[str] = mapped_column(Text)
+    source_references_json: Mapped[str] = mapped_column(Text)
+    suggested_due_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    suggested_owner_user_id: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL")
+    )
+    ai_run_id: Mapped[int | None] = mapped_column(
+        ForeignKey("ai_runs.id", ondelete="SET NULL")
+    )
+    source_snapshot_hash: Mapped[str] = mapped_column(String(64), index=True)
+    created_by_user_id: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL")
+    )
+    reviewed_by_user_id: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL")
+    )
+    reviewed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    applied_task_id: Mapped[int | None] = mapped_column(
+        ForeignKey("crm_tasks.id", ondelete="SET NULL")
+    )
+    applied_activity_id: Mapped[int | None] = mapped_column(
+        ForeignKey("crm_activities.id", ondelete="SET NULL")
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), index=True
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+    superseded_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class RevenueForecastModel(Base):
+    __tablename__ = "revenue_forecasts"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    organization_id: Mapped[int] = mapped_column(
+        ForeignKey("organizations.id", ondelete="CASCADE"), index=True
+    )
+    forecast_date: Mapped[date] = mapped_column(Date, index=True)
+    period_start: Mapped[date] = mapped_column(Date, index=True)
+    period_end: Mapped[date] = mapped_column(Date, index=True)
+    forecast_method: Mapped[str] = mapped_column(String(30), index=True)
+    currency: Mapped[str] = mapped_column(String(3), index=True)
+    open_pipeline_amount: Mapped[Decimal] = mapped_column(Numeric(18, 2))
+    weighted_pipeline_amount: Mapped[Decimal] = mapped_column(Numeric(18, 2))
+    commit_amount: Mapped[Decimal] = mapped_column(Numeric(18, 2))
+    best_case_amount: Mapped[Decimal] = mapped_column(Numeric(18, 2))
+    worst_case_amount: Mapped[Decimal] = mapped_column(Numeric(18, 2))
+    won_amount: Mapped[Decimal] = mapped_column(Numeric(18, 2))
+    lost_amount: Mapped[Decimal] = mapped_column(Numeric(18, 2))
+    scenario_json: Mapped[str] = mapped_column(Text, default="{}")
+    source_snapshot_hash: Mapped[str] = mapped_column(String(64), index=True)
+    generated_by_user_id: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL")
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+
+
+class OpportunityForecastSnapshotModel(Base):
+    __tablename__ = "opportunity_forecast_snapshots"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    organization_id: Mapped[int] = mapped_column(
+        ForeignKey("organizations.id", ondelete="CASCADE"), index=True
+    )
+    revenue_forecast_id: Mapped[int] = mapped_column(
+        ForeignKey("revenue_forecasts.id", ondelete="CASCADE"), index=True
+    )
+    opportunity_id: Mapped[int] = mapped_column(
+        ForeignKey("opportunities.id", ondelete="RESTRICT"), index=True
+    )
+    stage_id: Mapped[int] = mapped_column(
+        ForeignKey("pipeline_stages.id", ondelete="RESTRICT")
+    )
+    status: Mapped[str] = mapped_column(String(20))
+    currency: Mapped[str] = mapped_column(String(3))
+    amount: Mapped[Decimal] = mapped_column(Numeric(18, 2))
+    probability_percentage: Mapped[int] = mapped_column(Integer)
+    weighted_amount: Mapped[Decimal] = mapped_column(Numeric(18, 2))
+    expected_close_date: Mapped[date | None] = mapped_column(Date)
+    forecast_category: Mapped[str] = mapped_column(String(20), index=True)
+    risk_level: Mapped[str] = mapped_column(String(20), index=True)
+    included_in_commit: Mapped[bool] = mapped_column(Boolean)
+    included_in_best_case: Mapped[bool] = mapped_column(Boolean)
+    included_in_worst_case: Mapped[bool] = mapped_column(Boolean)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+
+
+class WinLossAnalysisModel(Base):
+    __tablename__ = "win_loss_analyses"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    organization_id: Mapped[int] = mapped_column(
+        ForeignKey("organizations.id", ondelete="CASCADE"), index=True
+    )
+    opportunity_id: Mapped[int] = mapped_column(
+        ForeignKey("opportunities.id", ondelete="RESTRICT"), index=True
+    )
+    outcome: Mapped[str] = mapped_column(String(10), index=True)
+    primary_reason: Mapped[str] = mapped_column(String(300))
+    secondary_reasons_json: Mapped[str] = mapped_column(Text, default="[]")
+    competitor: Mapped[str | None] = mapped_column(String(200))
+    amount: Mapped[Decimal] = mapped_column(Numeric(18, 2))
+    currency: Mapped[str] = mapped_column(String(3))
+    sales_cycle_days: Mapped[int | None] = mapped_column(Integer)
+    proposal_count: Mapped[int] = mapped_column(Integer)
+    activity_count: Mapped[int] = mapped_column(Integer)
+    engagement_summary_json: Mapped[str] = mapped_column(Text, default="{}")
+    notes: Mapped[str | None] = mapped_column(Text)
+    analyzed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True)
+    analyzed_by_user_id: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL")
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+
+
+class SalesIntelligenceRunModel(Base):
+    __tablename__ = "sales_intelligence_runs"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    organization_id: Mapped[int] = mapped_column(
+        ForeignKey("organizations.id", ondelete="CASCADE"), index=True
+    )
+    run_type: Mapped[str] = mapped_column(String(40), index=True)
+    status: Mapped[str] = mapped_column(String(20), index=True)
+    entity_type: Mapped[str | None] = mapped_column(String(20), index=True)
+    entity_id: Mapped[int | None] = mapped_column(Integer, index=True)
+    source_snapshot_hash: Mapped[str] = mapped_column(String(64))
+    result_summary_json: Mapped[str | None] = mapped_column(Text)
+    ai_run_id: Mapped[int | None] = mapped_column(
+        ForeignKey("ai_runs.id", ondelete="SET NULL")
+    )
+    error_code: Mapped[str | None] = mapped_column(String(80))
+    safe_error_message: Mapped[str | None] = mapped_column(String(500))
+    created_by_user_id: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL")
+    )
+    started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )

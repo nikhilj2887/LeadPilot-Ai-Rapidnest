@@ -812,6 +812,31 @@ contacts, companies, users, leads, opportunities, proposals, and stages are
 rejected. Advanced automation, integrations, forecasting AI, sequences,
 territories, billing, and onboarding remain deferred.
 
+### Sales automation and revenue intelligence
+
+The CRM Sales Intelligence workspace adds tenant-owned deterministic lead
+priorities, opportunity health, stale-record signals, follow-up queues,
+pipeline risks, win/loss evidence, team metrics, and decimal-safe revenue
+forecast snapshots. Numeric scores and forecasts use only persisted CRM and
+proposal evidence, retain explainable breakdowns and source hashes, and never
+call an AI provider.
+
+Recommendations use a human-review lifecycle: pending suggestions may be
+approved or rejected, and approved suggestions may create only a CRM task or
+activity. They cannot change an owner, stage, amount, probability, close date,
+proposal, or outcome, and never send communications. Optional AI explanations
+must use structured output and tenant-safe references, with CRM evidence
+labelled as untrusted input.
+
+Forecasts remain separated by organization and currency. Stage-weighted,
+commit, best-case, worst-case, and bounded scenario calculations preserve
+immutable opportunity snapshots without changing live pipeline records. CSV
+exports omit internal identifiers and notes and neutralize spreadsheet
+formulas. Viewer access is read-only, Analysts recalculate intelligence,
+Managers review recommendations and generate forecasts, and Admins or Owners
+manage tenant thresholds. External CRM integrations, autonomous agents,
+sequences, notifications, billing, and project delivery remain deferred.
+
 ### Rollout checklist
 
 1. Create or select the Supabase project.

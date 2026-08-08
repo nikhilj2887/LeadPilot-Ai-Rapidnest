@@ -44,6 +44,7 @@ from leadpilot.application.proposal_portal import (
     ProposalPortalManagementService,
 )
 from leadpilot.application.proposals import ProposalService
+from leadpilot.application.sales_intelligence import SalesIntelligenceService
 from leadpilot.application.service_catalog import ServiceCatalogService
 from leadpilot.config import Settings, get_settings
 from leadpilot.infrastructure.ai_providers import create_ai_provider
@@ -91,6 +92,9 @@ from leadpilot.infrastructure.database.proposal_portal_repository import (
 from leadpilot.infrastructure.database.proposal_repository import (
     SqlAlchemyProposalRepository,
 )
+from leadpilot.infrastructure.database.sales_intelligence_repository import (
+    SqlAlchemySalesIntelligenceRepository,
+)
 from leadpilot.infrastructure.database.service_catalog_repository import (
     ServiceCatalogRepository,
 )
@@ -123,6 +127,7 @@ class Container:
     organizations: OrganizationRepository
     companies: CompanyService
     crm: CrmService
+    sales_intelligence: SalesIntelligenceService
     service_catalog: ServiceCatalogService
     proposals: ProposalService
     discovery: DiscoveryService
@@ -278,6 +283,14 @@ def bootstrap(
     branding = organization_repository.get_branding(selected_id)
     portal_repository = ProposalPortalRepository(session_factory, selected_id)
     document_storage = LocalDocumentStorage(resolved_settings.document_storage_path)
+    crm_service = CrmService(
+        SqlAlchemyCrmRepository(session_factory, selected_id),
+        user_id,
+        lambda: require(OrganizationRole.VIEWER),
+        lambda: require(OrganizationRole.ANALYST),
+        lambda: require(OrganizationRole.MANAGER),
+        audit,
+    )
     return Container(
         settings=resolved_settings,
         engine=engine,
@@ -286,12 +299,15 @@ def bootstrap(
         organization_context=organization_context,
         organizations=organization_repository,
         companies=company_service,
-        crm=CrmService(
-            SqlAlchemyCrmRepository(session_factory, selected_id),
+        crm=crm_service,
+        sales_intelligence=SalesIntelligenceService(
+            SqlAlchemySalesIntelligenceRepository(session_factory, selected_id),
+            crm_service,
             user_id,
             lambda: require(OrganizationRole.VIEWER),
             lambda: require(OrganizationRole.ANALYST),
             lambda: require(OrganizationRole.MANAGER),
+            lambda: require(OrganizationRole.ADMIN),
             audit,
         ),
         service_catalog=catalog_service,

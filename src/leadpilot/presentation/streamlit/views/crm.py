@@ -4,6 +4,7 @@ from decimal import Decimal
 
 import streamlit as st
 
+from leadpilot.application.auth import AuthorizationError
 from leadpilot.application.crm import CrmError
 from leadpilot.bootstrap import Container
 from leadpilot.presentation.streamlit.components import page_header
@@ -15,7 +16,7 @@ def render(container: Container) -> None:
         "Manage contacts, leads, opportunities, follow-ups, and sales history.",
         eyebrow="Sales workspace",
     )
-    overview, leads, opportunities, contacts, activities, tasks = st.tabs(
+    overview, leads, opportunities, contacts, activities, tasks, intelligence = st.tabs(
         (
             "Overview",
             "Leads",
@@ -23,6 +24,7 @@ def render(container: Container) -> None:
             "Contacts",
             "Activities & Notes",
             "Tasks",
+            "Sales Intelligence",
         )
     )
     with overview:
@@ -37,6 +39,233 @@ def render(container: Container) -> None:
         _activities(container)
     with tasks:
         _tasks(container)
+    with intelligence:
+        _sales_intelligence(container)
+
+
+def _sales_intelligence(container: Container) -> None:
+    st.subheader("Sales Intelligence")
+    st.caption(
+        "Deterministic scores and forecasts with reviewable recommendations. "
+        "No CRM record is changed automatically."
+    )
+    (
+        summary,
+        lead_tab,
+        health_tab,
+        follow_up,
+        risk_tab,
+        forecast_tab,
+        analysis_tab,
+        history,
+    ) = st.tabs(
+        (
+            "Executive Summary",
+            "Lead Priorities",
+            "Opportunity Health",
+            "Follow-Up Queue",
+            "Pipeline Risk",
+            "Revenue Forecast",
+            "Win/Loss & Team",
+            "Recommendation History",
+        )
+    )
+    recommendations = container.sales_intelligence.list_recommendations(page_size=500)
+    forecasts = container.sales_intelligence.repo.list_forecasts()
+    with summary:
+        risks = container.sales_intelligence.pipeline_risks()
+        values = (
+            ("Pending recommendations", recommendations.total),
+            ("Pipeline risks", len(risks)),
+            ("Forecast snapshots", len(forecasts)),
+            ("Automation", "Human approved"),
+        )
+        for column, (label, value) in zip(st.columns(4), values, strict=True):
+            column.metric(label, value)
+        if risks:
+            st.bar_chart(
+                {row["risk_type"]: float(row["amount_affected"]) for row in risks}
+            )
+        else:
+            st.info("No pipeline risks are currently available.")
+    with lead_tab:
+        leads = container.crm.list("lead", page_size=500).items
+        if st.button("Recalculate lead priorities"):
+            _action(
+                container.sales_intelligence.calculate_all_lead_priorities,
+                "Lead priorities recalculated.",
+            )
+        st.dataframe(
+            [
+                {
+                    "Lead": x.lead_number,
+                    "Title": x.title,
+                    "Qualification score": x.score,
+                    "Current priority": x.priority,
+                    "Next follow-up": x.next_follow_up_at,
+                }
+                for x in leads
+            ],
+            hide_index=True,
+            width="stretch",
+        )
+    with health_tab:
+        opportunities = container.crm.list("opportunity", page_size=500).items
+        if st.button("Recalculate opportunity health"):
+            _action(
+                container.sales_intelligence.calculate_all_health_scores,
+                "Opportunity health recalculated.",
+            )
+        st.dataframe(
+            [
+                {
+                    "Opportunity": x.opportunity_number,
+                    "Name": x.name,
+                    "Status": x.status,
+                    "Amount": x.amount,
+                    "Probability": x.probability_percentage,
+                    "Close date": x.expected_close_date,
+                }
+                for x in opportunities
+            ],
+            hide_index=True,
+            width="stretch",
+        )
+    with follow_up:
+        pending = [
+            x
+            for x in recommendations.items
+            if x.recommendation_type in {"FOLLOW_UP", "CALL", "CREATE_TASK"}
+        ]
+        if pending:
+            st.dataframe(
+                [
+                    {
+                        "Entity": x.entity_type,
+                        "Type": x.recommendation_type,
+                        "Priority": x.priority,
+                        "Title": x.title,
+                        "Status": x.status,
+                        "Due": x.suggested_due_at,
+                    }
+                    for x in pending
+                ],
+                hide_index=True,
+                width="stretch",
+            )
+        else:
+            st.info("No follow-up recommendations need review.")
+        pending_review = [
+            item for item in recommendations.items if item.status == "PENDING_REVIEW"
+        ]
+        if pending_review:
+            selected = st.selectbox(
+                "Recommendation to review",
+                pending_review,
+                format_func=lambda item: f"{item.priority} · {item.title}",
+            )
+            approve, reject = st.columns(2)
+            if approve.button("Approve recommendation"):
+                _action(
+                    lambda: container.sales_intelligence.approve_recommendation(
+                        selected.id
+                    ),
+                    "Recommendation approved. Apply remains a separate action.",
+                )
+            if reject.button("Reject recommendation"):
+                _action(
+                    lambda: container.sales_intelligence.reject_recommendation(
+                        selected.id
+                    ),
+                    "Recommendation rejected.",
+                )
+    with risk_tab:
+        risks = container.sales_intelligence.pipeline_risks()
+        st.dataframe(risks, hide_index=True, width="stretch") if risks else st.info(
+            "No pipeline risk data is available."
+        )
+    with forecast_tab:
+        start = st.date_input("Forecast start")
+        end = st.date_input(
+            "Forecast end",
+            value=start.replace(year=start.year + 1)
+            if start.month != 2 or start.day != 29
+            else start,
+        )
+        method = st.selectbox(
+            "Forecast method",
+            ("STAGE_WEIGHTED", "MANAGER_COMMIT", "BEST_CASE", "WORST_CASE", "SCENARIO"),
+        )
+        adjustment = st.number_input(
+            "Scenario probability adjustment",
+            min_value=-100,
+            max_value=100,
+            value=0,
+            disabled=method != "SCENARIO",
+        )
+        if st.button("Generate forecast"):
+            _action(
+                lambda: container.sales_intelligence.generate_forecast(
+                    start,
+                    end,
+                    method,
+                    {"probability_adjustment": adjustment}
+                    if method == "SCENARIO"
+                    else None,
+                ),
+                "Forecast generated.",
+            )
+        if forecasts:
+            st.dataframe(
+                [
+                    {
+                        "Date": x.forecast_date,
+                        "Period": f"{x.period_start} – {x.period_end}",
+                        "Method": x.forecast_method,
+                        "Currency": x.currency,
+                        "Pipeline": x.open_pipeline_amount,
+                        "Weighted": x.weighted_pipeline_amount,
+                        "Commit": x.commit_amount,
+                        "Best case": x.best_case_amount,
+                        "Worst case": x.worst_case_amount,
+                    }
+                    for x in forecasts
+                ],
+                hide_index=True,
+                width="stretch",
+            )
+        else:
+            st.info("No forecast snapshots have been generated.")
+    with analysis_tab:
+        st.write("Team performance")
+        try:
+            team = container.sales_intelligence.team_metrics()
+        except AuthorizationError:
+            team = ()
+        st.dataframe(team, hide_index=True, width="stretch") if team else st.info(
+            "Insufficient data for team performance metrics."
+        )
+        st.caption("Win/loss analyses become available after opportunities are closed.")
+    with history:
+        if recommendations.items:
+            st.dataframe(
+                [
+                    {
+                        "Reference": f"REC-{x.id:06d}",
+                        "Entity": x.entity_type,
+                        "Type": x.recommendation_type,
+                        "Priority": x.priority,
+                        "Status": x.status,
+                        "Title": x.title,
+                        "Created": x.created_at,
+                    }
+                    for x in recommendations.items
+                ],
+                hide_index=True,
+                width="stretch",
+            )
+        else:
+            st.info("No recommendation history is available.")
 
 
 def _overview(container: Container) -> None:
