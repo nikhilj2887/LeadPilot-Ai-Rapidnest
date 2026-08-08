@@ -271,3 +271,32 @@ def test_crm_foundation_migration(tmp_path: Path, monkeypatch) -> None:
     assert "ck_opportunities_probability" in {
         item["name"] for item in inspector.get_check_constraints("opportunities")
     }
+
+
+def test_sales_intelligence_migration(tmp_path: Path, monkeypatch) -> None:
+    database = tmp_path / "sales-intelligence.db"
+    monkeypatch.setenv("LEADPILOT_DATABASE_URL", f"sqlite:///{database}")
+    command.upgrade(Config("alembic.ini"), "head")
+    inspector = inspect(create_engine(f"sqlite:///{database}"))
+    assert {
+        "sales_intelligence_configs",
+        "lead_intelligence_scores",
+        "opportunity_health_scores",
+        "sales_recommendations",
+        "revenue_forecasts",
+        "opportunity_forecast_snapshots",
+        "win_loss_analyses",
+        "sales_intelligence_runs",
+    } <= set(inspector.get_table_names())
+    assert "uq_sales_intelligence_config_org" in {
+        item["name"]
+        for item in inspector.get_unique_constraints("sales_intelligence_configs")
+    }
+    assert {
+        "organization_id",
+        "source_snapshot_hash",
+        "priority_band",
+        "score_breakdown_json",
+    } <= {
+        column["name"] for column in inspector.get_columns("lead_intelligence_scores")
+    }

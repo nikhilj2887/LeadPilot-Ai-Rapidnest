@@ -39,6 +39,14 @@ APPLICATION_TABLES = (
     "crm_notes",
     "crm_stage_history",
     "crm_assignment_history",
+    "sales_intelligence_configs",
+    "lead_intelligence_scores",
+    "opportunity_health_scores",
+    "revenue_forecasts",
+    "opportunity_forecast_snapshots",
+    "sales_recommendations",
+    "win_loss_analyses",
+    "sales_intelligence_runs",
     "audit_logs",
 )
 
